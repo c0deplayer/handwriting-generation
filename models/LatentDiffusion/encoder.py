@@ -4,11 +4,11 @@ import math
 import torch
 from torch import nn, Tensor
 
-from models.LatentDiffusion.attention import WordAttention
+from .attention import WordAttention
 
 
 class CharacterEncoder(nn.Module):
-    def __init__(self, in_features: int, hidden_size: int, max_seq_len: int):
+    def __init__(self, in_features: int, hidden_size: int, max_seq_len: int) -> None:
         super().__init__()
 
         self.embedding = nn.Embedding(in_features, hidden_size)
@@ -16,6 +16,14 @@ class CharacterEncoder(nn.Module):
 
         self.emb_dim = hidden_size
         self.max_seq_len = max_seq_len
+        self.positional_encoding = PositionalEncoder(max_seq_len, hidden_size)()
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.embedding(x)
+
+        x += self.positional_encoding[: x.size(1), :]
+
+        return self.attention(x)
 
 
 class PositionalEncoder(nn.Module):
