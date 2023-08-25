@@ -1,0 +1,17 @@
+device: "cuda"
+checkpoint_path: "/home/codeplayer/Studia/Inżynierka/handwriting-generation/model_checkpoints/LatentDiffusion"
+data_path: "/home/codeplayer/Studia/Inżynierka/handwriting-generation/raw_data/IAMDB"
+
+batch_size: 96
+img_height: 64
+img_width: 256
+max_text_len: 10
+vocab: "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+max_epochs: 1000
+channels: 4
+emb_dim: 320
+num_heads: 4
+num_res_block: 1
+
+interpolation: False
