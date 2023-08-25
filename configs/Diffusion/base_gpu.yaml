@@ -8,9 +8,9 @@ blacklist: !!python/tuple
   - z01-010b
   - z01-010c
 device: "cuda"
-checkpoint_path: "/home/codeplayer/Studia/Inżynierka/Handwriting-Synthesis-Thesis-fr-fr/model_checkpoints/Diffusion"
-data_path: "/home/codeplayer/Studia/Inżynierka/Handwriting-Synthesis-Thesis-fr-fr/raw_data/IAMonDB"
-dataset_txt: "/home/codeplayer/Studia/Inżynierka/Handwriting-Synthesis-Thesis-fr-fr/raw_data/IAMonDB/dataset.txt"
+checkpoint_path: "/home/codeplayer/Studia/Inżynierka/handwriting-generation/model_checkpoints/Diffusion"
+data_path: "/home/codeplayer/Studia/Inżynierka/handwriting-generation/raw_data/IAMonDB"
+dataset_txt: "/home/codeplayer/Studia/Inżynierka/handwriting-generation/raw_data/IAMonDB/dataset.txt"
 
 batch_size: 48
 img_height: 90
