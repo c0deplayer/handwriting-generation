@@ -13,3 +13,4 @@
    (A.K.A. LDM & Stable Diffusion)](https://arxiv.org/pdf/2112.10752.pdf)
 6. [Attention Is All You Need](https://arxiv.org/pdf/1706.03762.pdf)
 7. [Deep Residual Learning for Image Recognition](https://arxiv.org/pdf/1512.03385.pdf)
+8. [IAM Handwriting Database & IAM On-Line Handwriting Database](https://fki.tic.heia-fr.ch/databases)
