@@ -1,0 +1,29 @@
+blacklist: !!python/tuple
+  - z00-001
+  - a08-551z
+  - z01-000
+  - z01-000z
+  - z01-010a
+  - z01-010
+  - z01-010b
+  - z01-010c
+device: "cuda"
+checkpoint_path: "/home/codeplayer/Studia/Inżynierka/Handwriting-Synthesis-Thesis-fr-fr/model_checkpoints/Diffusion"
+data_path: "/home/codeplayer/Studia/Inżynierka/Handwriting-Synthesis-Thesis-fr-fr/raw_data/IAMonDB"
+dataset_txt: "/home/codeplayer/Studia/Inżynierka/Handwriting-Synthesis-Thesis-fr-fr/raw_data/IAMonDB/dataset.txt"
+
+batch_size: 32
+max_files: 0
+max_seq_len: 480
+max_text_len: 50
+train_size: 0.85
+vocab: "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ."
+
+max_epochs: 300
+input_size: 3
+hidden_size: 400
+num_mixture: 20
+num_window: 10
+lstm_clip: 10.0
+mdn_clip: 100.0
+bias: 0.0
