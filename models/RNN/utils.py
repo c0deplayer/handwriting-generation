@@ -45,7 +45,6 @@ def reshape_down(
 def add_prefix(
     batch: tuple[Tensor, Tensor | None],
     *,
-    device: torch.device,
     return_batch: bool = True,
 ) -> tuple[tuple[Tensor, Tensor] | Tensor, Tensor]:
     """
@@ -70,7 +69,7 @@ def add_prefix(
     strokes_copy = copy.deepcopy(strokes)
     batch_size, _, input_len = strokes.size()
 
-    prefix = torch.zeros([batch_size, 1, input_len], device=device)
+    prefix = torch.zeros([batch_size, 1, input_len], device=strokes.device)
     strokes = torch.cat([prefix, strokes[:, :-1]], dim=1)
 
     return ((strokes, text), strokes_copy) if return_batch else (strokes, strokes_copy)

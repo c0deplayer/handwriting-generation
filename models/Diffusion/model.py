@@ -30,7 +30,6 @@ class AttentionBlock(nn.Module):
         d_model: int,
         num_heads: int,
         *,
-        device: torch.device,
         drop_rate: float = 0.1,
         pos_factor: int = 1,
         swap_channel_layer: bool = True,
@@ -46,8 +45,6 @@ class AttentionBlock(nn.Module):
             _description_
         num_heads : int
             _description_
-        device: torch.device
-            _description_
         drop_rate : float, optional
             _description_, by default 0.1
         pos_factor : int, optional
@@ -57,13 +54,10 @@ class AttentionBlock(nn.Module):
         """
 
         super().__init__()
-        self.__device = device
 
         self.swap_channel_layer = swap_channel_layer
-        self.text_pos = PositionalEncoder(2000, d_model)().to(device)
-        self.stroke_pos = PositionalEncoder(2000, d_model, pos_factor=pos_factor)().to(
-            device
-        )
+        self.text_pos = PositionalEncoder(2000, d_model)()
+        self.stroke_pos = PositionalEncoder(2000, d_model, pos_factor=pos_factor)()
 
         self.dense_layer = nn.Linear(in_features=in_features, out_features=d_model)
         self.layer_norm = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=False)
@@ -101,6 +95,9 @@ class AttentionBlock(nn.Module):
         tuple[Tensor, Tensor]
             _description_
         """
+        if self.text_pos.device != x.device:
+            self.text_pos = self.text_pos.to(x.device)
+            self.stroke_pos = self.stroke_pos.to(x.device)
 
         text = self.dense_layer(F.silu(text))
         text = self.affine_0(self.layer_norm(text), sigma)
@@ -130,7 +127,6 @@ class AttentionBlock(nn.Module):
 class DiffusionModel(pl.LightningModule):
     def __init__(
         self,
-        device: str,
         num_layers: int = 2,
         c1: int = 128,
         c2: int = 192,
@@ -143,8 +139,6 @@ class DiffusionModel(pl.LightningModule):
 
         Parameters
         ----------
-        device : str
-            _description_
         num_layers : int, optional
             _description_, by default 2
         c1 : int, optional
@@ -161,7 +155,6 @@ class DiffusionModel(pl.LightningModule):
 
         super().__init__()
 
-        self.__device = torch.device(device)
         self.beta = utils.get_beta_set()
         self.alpha = torch.cumprod(1 - self.beta, dim=0)
 
@@ -179,7 +172,6 @@ class DiffusionModel(pl.LightningModule):
             num_heads=3,
             drop_rate=drop_rate,
             pos_factor=4,
-            device=self.__device,
         )
 
         self.enc_3 = ConvBlock(c1, c2, c3)
@@ -189,7 +181,6 @@ class DiffusionModel(pl.LightningModule):
             num_heads=4,
             drop_rate=drop_rate,
             pos_factor=2,
-            device=self.__device,
         )
 
         self.attention_dense = nn.Linear(c3, c2 * 2)
@@ -201,7 +192,6 @@ class DiffusionModel(pl.LightningModule):
                     6,
                     drop_rate=drop_rate,
                     swap_channel_layer=False,
-                    device=self.__device,
                 )
                 for _ in range(num_layers)
             ]
@@ -300,7 +290,7 @@ class DiffusionModel(pl.LightningModule):
         strokes, pen_lifts = strokes[:, :, :2], strokes[:, :, 2]
 
         alphas = utils.get_alphas(strokes.size(0), self.alpha)
-        alphas = alphas.to(self.__device)
+        alphas = alphas.to(strokes.device)
         eps = torch.randn_like(strokes)
 
         strokes_perturbed = torch.sqrt(alphas) * strokes
@@ -322,7 +312,7 @@ class DiffusionModel(pl.LightningModule):
         strokes, pen_lifts = strokes[:, :, :2], strokes[:, :, 2]
 
         alphas = utils.get_alphas(strokes.size(0), self.alpha)
-        alphas = alphas.to(self.__device)
+        alphas = alphas.to(strokes.device)
         eps = torch.randn_like(strokes)
 
         strokes_perturbed = torch.sqrt(alphas) * strokes
@@ -427,7 +417,7 @@ class DiffusionModel(pl.LightningModule):
             )
 
         tokenizer = Tokenizer()
-        style_extractor = StyleExtractor(device=self.__device)
+        style_extractor = StyleExtractor(device=self.device)
         beta_set = utils.get_beta_set()
         alpha_set = torch.cumprod(1 - beta_set, dim=0)
 

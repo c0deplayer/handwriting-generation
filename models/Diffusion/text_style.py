@@ -21,6 +21,7 @@ class StyleExtractor(nn.Module):
         device: torch.device
             _description_
         """
+        
         super().__init__()
 
         self.device = device
@@ -76,7 +77,9 @@ class TextStyleEncoder(nn.Module):
         hidden_size: int
             _description_, by default 512
         """
+
         super().__init__()
+
         self.dropout = nn.Dropout(p=0.3)
         self.style_ffn = FeedForwardNetwork(
             in_features, d_model, hidden_size=hidden_size
@@ -110,7 +113,7 @@ class TextStyleEncoder(nn.Module):
         Tensor
             _description_
         """
-        
+
         style = reshape_up(self.dropout(style), factor=5)
 
         style = self.layer_norm(self.style_ffn(style))

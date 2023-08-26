@@ -92,7 +92,6 @@ if __name__ == "__main__":
 
     if args.config == "Diffusion":
         kwargs_model = dict(
-            device=config.device,
             num_layers=config.num_layers,
             c1=config.channels,
             c2=config.channels * 3 // 2,
@@ -109,7 +108,6 @@ if __name__ == "__main__":
     elif args.config == "RNN":
         kwargs_model = dict(
             input_size=config.input_size,
-            device=config.device,
             hidden_size=config.hidden_size,
             num_window=config.num_window,
             num_mixture=config.num_mixture,
