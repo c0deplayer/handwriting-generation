@@ -66,8 +66,10 @@ class AttentionalBlock(nn.Module):
         self.__device = device
 
         self.swap_channel_layer = swap_channel_layer
-        self.text_pos = PositionalEncoder(d_model)(2000).to(device)
-        self.stroke_pos = PositionalEncoder(d_model, pos_factor)(2000).to(device)
+        self.text_pos = PositionalEncoder(2000, d_model)().to(device)
+        self.stroke_pos = PositionalEncoder(2000, d_model, pos_factor=pos_factor)().to(
+            device
+        )
 
         self.dense_layer = nn.Linear(in_features=in_features, out_features=d_model)
         self.layer_norm = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=False)
