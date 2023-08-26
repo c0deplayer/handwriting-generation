@@ -289,6 +289,7 @@ class UNetModel(nn.Module):
 
         for module in self.input_blocks:
             x = module(x, t_emb, context)
+            x_input_block.append(x)
 
         x = self.middle_block(x, t_emb, context)
 
