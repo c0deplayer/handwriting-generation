@@ -56,13 +56,9 @@ class UpSample(nn.Module):
     def __init__(self, channels: int) -> None:
         super().__init__()
 
-        # self.conv = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
-        # TODO: kernel_size 5 or 3? stride 2 or 1?
         self.conv = nn.ConvTranspose2d(channels, channels, kernel_size=5, stride=2)
 
     def forward(self, x: Tensor) -> Tensor:
-        # x = F.interpolate(x, scale_factor=2, mode="nearest")
-
         return self.conv(x)
 
 

@@ -80,6 +80,7 @@ class SpatialTransformer(nn.Module):
         channels: int,
         n_heads: int,
         d_head: int,
+        *,
         n_layers: int = 1,
         dropout: float = 0.0,
         d_cond: int = None,

@@ -2,8 +2,6 @@ import torch.nn.functional as F
 from einops import rearrange, einsum
 from torch import nn, Tensor
 
-from .utils import GroupNorm32, scaled_dot_product_attention
-
 
 class CrossAttention(nn.Module):
     use_flash_attention: bool = False
@@ -89,59 +87,59 @@ class CrossAttention(nn.Module):
         return self.to_out(out)
 
 
-class AttentionBlock(nn.Module):
-    """
-    Originally ported from here, but adapted to the N-d case.
-    https://github.com/hojonathanho/diffusion/blob/master/diffusion_tf/models/unet.py#L66.
-    """
-
-    def __init__(self, channels: int, heads: int = 1, head_channels: int = -1):
-        """
-        _summary_
-
-        Parameters
-        ----------
-        channels : int
-            _description_
-        heads : int, optional
-            _description_, by default 1
-        head_channels : int, optional
-            _description_, by default -1
-
-        Raises
-        ------
-        RuntimeError
-            _description_
-        """
-
-        super().__init__()
-        self.channels = channels
-        if head_channels == -1:
-            self.heads = heads
-        elif channels % head_channels != 0:
-            raise RuntimeError(
-                f"q,k,v channels {channels} is not divisible by num_head_channels {head_channels}"
-            )
-        else:
-            self.heads = channels // head_channels
-
-        self.norm = GroupNorm32(32, channels)
-        self.proj_in = nn.Conv2d(channels, channels * 3, kernel_size=1)
-
-        self.proj_out = nn.Conv2d(channels, channels, kernel_size=1)
-
-        for p in self.proj_out.parameters():
-            p.detach().zero_()
-
-    def forward(self, x: Tensor) -> Tensor:
-        # b, c, h, w = x.size()
-        x = rearrange(x, "b c h w -> b c (h w)")
-        qkv = self.proj_in(self.norm(x))
-
-        h = scaled_dot_product_attention(qkv, self.heads)
-        h = self.proj_out(h)
-
-        return rearrange((x + h), "b c (h w) -> b c h w")
+# class AttentionBlock(nn.Module):
+#     """
+#     Originally ported from here, but adapted to the N-d case.
+#     https://github.com/hojonathanho/diffusion/blob/master/diffusion_tf/models/unet.py#L66.
+#     """
+#
+#     def __init__(self, channels: int, heads: int = 1, head_channels: int = -1):
+#         """
+#         _summary_
+#
+#         Parameters
+#         ----------
+#         channels : int
+#             _description_
+#         heads : int, optional
+#             _description_, by default 1
+#         head_channels : int, optional
+#             _description_, by default -1
+#
+#         Raises
+#         ------
+#         RuntimeError
+#             _description_
+#         """
+#
+#         super().__init__()
+#         self.channels = channels
+#         if head_channels == -1:
+#             self.heads = heads
+#         elif channels % head_channels != 0:
+#             raise RuntimeError(
+#                 f"q,k,v channels {channels} is not divisible by num_head_channels {head_channels}"
+#             )
+#         else:
+#             self.heads = channels // head_channels
+#
+#         self.norm = GroupNorm32(32, channels)
+#         self.proj_in = nn.Conv2d(channels, channels * 3, kernel_size=1)
+#
+#         self.proj_out = nn.Conv2d(channels, channels, kernel_size=1)
+#
+#         for p in self.proj_out.parameters():
+#             p.detach().zero_()
+#
+#     def forward(self, x: Tensor) -> Tensor:
+#         # b, c, h, w = x.size()
+#         x = rearrange(x, "b c h w -> b c (h w)")
+#         qkv = self.proj_in(self.norm(x))
+#
+#         h = scaled_dot_product_attention(qkv, self.heads)
+#         h = self.proj_out(h)
+#
+#         return rearrange((x + h), "b c (h w) -> b c h w")
 
 
 class WordAttention(nn.Module):
