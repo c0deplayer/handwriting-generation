@@ -1,4 +1,8 @@
+import math
+
+import torch
 import torch.nn as nn
+from einops import repeat
 from torch import Tensor
 
 from .encoder import CharacterEncoder
@@ -33,7 +37,6 @@ class UNetModel(nn.Module):
         channel_multipliers: tuple[int],
         d_cond: int,  # 768
         heads: int,
-        d_head: int,
         dropout: float = 0.0,
         n_style_classes: int = None,
         tf_layers: int = 1,
@@ -48,6 +51,7 @@ class UNetModel(nn.Module):
         self.channels = channels
         self.max_seq_len = max_seq_len
         self.dropout = dropout
+        self.n_style_classes = n_style_classes
 
         self.word_emb = CharacterEncoder(vocab_size, d_cond, max_seq_len)
 
@@ -116,7 +120,7 @@ class UNetModel(nn.Module):
             ResBlock(channels, d_time_emb),
         )
 
-        self.output_block = nn.ModuleList()
+        self.output_blocks = nn.ModuleList()
 
         for i in reversed(range(levels)):
             for j in range(res_layers + 1):
@@ -144,10 +148,71 @@ class UNetModel(nn.Module):
                 if i != 0 and j == res_layers:
                     layers.append(UpSample(channels))
 
-                self.output_block.append(TimestepEmbedSequential(*layers))
+                self.output_blocks.append(TimestepEmbedSequential(*layers))
 
         self.out = nn.Sequential(
             GroupNorm32(32, channels),
             nn.SiLU(),
             nn.Conv2d(channels, out_channels, kernel_size=3, padding=1),
         )
+
+    def time_step_embedding(
+        self, time_steps: Tensor, *, max_period: int = 10000, repeat_only: bool = False
+    ) -> Tensor:
+        if repeat_only:
+            return repeat(time_steps, "b -> b d", d=self.channels)
+
+        half = self.channels // 2
+
+        frequencies = torch.exp(
+            -math.log(max_period)
+            * torch.arange(start=0, end=half, dtype=torch.float32)
+            / half,
+        ).to(device=time_steps.device)
+
+        args = time_steps[:, None].float() * frequencies[None]
+
+        embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
+
+        if self.channels % 2:
+            return torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
+        else:
+            return embedding
+
+    def forward(
+        self,
+        x: Tensor,
+        time_steps: Tensor,
+        *,
+        context: Tensor = None,
+        writer_id: Tensor = None,
+    ) -> Tensor:
+        if writer_id is None or self.n_style_classes is None:
+            raise RuntimeError(
+                "Writer_id must be specified if and only if the model is class-conditional"
+            )
+
+        x_input_block = []
+        t_emb = self.time_step_embedding(time_steps)
+        t_emb = self.time_embed(t_emb)
+
+        if self.n_style_classes is not None and writer_id.size() != x.size(1):
+            raise RuntimeError(
+                f"Expected size to be {x.size(1)}, got {writer_id.size()}"
+            )
+
+        t_emb = t_emb + self.label_emb(writer_id)
+
+        if context is not None:
+            context = self.word_emb(context)
+
+        for module in self.input_blocks:
+            x = module(x, t_emb, context)
+
+        x = self.middle_block(x, t_emb, context)
+
+        for module in self.output_blocks:
+            x = torch.cat([x, x_input_block.pop()], dim=1)
+            x = module(x, t_emb, context)
+
+        return self.out(x)
