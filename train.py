@@ -11,9 +11,9 @@ from lightning.pytorch.plugins import MixedPrecisionPlugin
 from configs.config import ConfigDiffusion, ConfigRNN
 from data.dataset import DataModule, IAMDataset, IAMonDataset
 from models.Diffusion.model import DiffusionModel
-from models.RNN.model import RecurrentNeuralNetwork
+from models.RNN.model import RNNModel
 
-MODELS = {"Diffusion": DiffusionModel, "RNN": RecurrentNeuralNetwork}
+MODELS = {"Diffusion": DiffusionModel, "RNN": RNNModel}
 CONFIGS = {"Diffusion": ConfigDiffusion, "RNN": ConfigRNN}
 DATASETS = {
     "Diffusion": IAMonDataset,

@@ -30,7 +30,6 @@ def reshape_down(
     """
 
     if ground_true is None:
-        # return batch.reshape(batch.size(0) * batch.size(1), -1)
         return rearrange(batch, "b h w -> (b h) w")
 
     if batch.size(0) != ground_true.size(0) or batch.size(1) != ground_true.size(1):
@@ -38,7 +37,6 @@ def reshape_down(
             f"Expected batch to be of shape {ground_true.size()}, got {batch.size()}"
         )
 
-    # return batch.reshape(ground_true.size(0) * ground_true.size(1), -1)
     return rearrange(
         batch, "b h w -> (b h) w", b=ground_true.size(0), h=ground_true.size(1)
     )

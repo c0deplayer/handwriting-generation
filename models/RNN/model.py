@@ -12,7 +12,7 @@ from .network import MixtureDensityNetwork
 from .window import GaussianWindow
 
 
-class RecurrentNeuralNetwork(pl.LightningModule):
+class RNNModel(pl.LightningModule):
     def __init__(
         self,
         input_size: int,
@@ -97,7 +97,7 @@ class RecurrentNeuralNetwork(pl.LightningModule):
             )
 
     def forward(
-        self, batch: tuple[Tensor, ...], *, states: tuple[Tensor, ...] = None
+        self, batch: tuple[Tensor, Tensor], *, states: tuple[Tensor, ...] = None
     ) -> tuple[tuple[Tensor, ...], Tensor, tuple[Tensor, ...]]:
         strokes, text = batch
         batch_size, steps, _ = strokes.size()
@@ -129,9 +129,7 @@ class RecurrentNeuralNetwork(pl.LightningModule):
             strokes_s = strokes[:, s : s + 1, :]
             strokes_window = torch.cat([strokes_s, window_s], dim=-1)
             out_s, hidden_1 = self.lstm_0(strokes_window, hidden_1)
-            phi, kappa, window_s = self.window(
-                (out_s, text, kappa), device=self.__device
-            )
+            phi, kappa, window_s = self.window(out_s, text, kappa, device=self.__device)
 
             out_1.append(out_s)
             window.append(window_s)
@@ -290,6 +288,7 @@ class RecurrentNeuralNetwork(pl.LightningModule):
             indices = tokenizer.encode(raw_text)
             text = eye[indices]
         else:
+            # noinspection PyUnresolvedReferences
             text = raw_text.copy()
 
         strokes = torch.zeros((1, 1, 3), device=self.__device)

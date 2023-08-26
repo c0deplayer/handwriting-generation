@@ -30,13 +30,13 @@ class MixtureDensityNetwork(nn.Module):
 
         self.bias = bias if bias is not None else 0.0
 
-    def forward(self, strokes: Tensor) -> tuple[Tensor, ...]:
+    def forward(self, x: Tensor) -> tuple[Tensor, ...]:
         """
         _summary_
 
         Parameters
         ----------
-        strokes : Tensor
+        x : Tensor
             _description_
 
         Returns
@@ -45,12 +45,12 @@ class MixtureDensityNetwork(nn.Module):
             _description_
         """
 
-        pi_hat, sigma_hat = self.pi(strokes), self.sigma(strokes)
+        pi_hat, sigma_hat = self.pi(x), self.sigma(x)
 
         pi = torch.softmax(pi_hat * (1 + self.bias), dim=-1)
         sigma = torch.exp(sigma_hat - self.bias)
-        mu = self.mu(strokes)
-        rho = torch.tanh(self.rho(strokes))
-        eos = torch.sigmoid(self.eos(strokes))
+        mu = self.mu(x)
+        rho = torch.tanh(self.rho(x))
+        eos = torch.sigmoid(self.eos(x))
 
         return pi, mu, sigma, rho, eos

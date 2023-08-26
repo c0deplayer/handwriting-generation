@@ -24,14 +24,18 @@ class GaussianWindow(nn.Module):
         self.kappa = nn.Linear(in_features, out_features)
 
     def forward(
-        self, batch: tuple[Tensor, Tensor, Tensor], *, device: torch.device
+        self, x: Tensor, text: Tensor, prev_kappa: Tensor, *, device: torch.device
     ) -> tuple[Tensor, Tensor, Tensor]:
         """
         _summary_
 
         Parameters
         ----------
-        batch : tuple[Tensor, Tensor, Tensor]
+        x : Tensor
+            _description_
+        text : Tensor
+            _description_
+        prev_kappa : Tensor
             _description_
         device : torch.device
             _description_
@@ -42,13 +46,12 @@ class GaussianWindow(nn.Module):
             _description_
         """
 
-        strokes, text, prev_kappa = batch
         num_chars = text.size(1)
-        strokes = strokes[:, 0]
+        x = x[:, 0]
 
-        alpha = torch.exp(self.alpha(strokes))
-        beta = torch.exp(self.beta(strokes))
-        new_kappa = prev_kappa + torch.exp(self.kappa(strokes))
+        alpha = torch.exp(self.alpha(x))
+        beta = torch.exp(self.beta(x))
+        new_kappa = prev_kappa + torch.exp(self.kappa(x))
 
         alpha = repeat(alpha, "h w -> h w new_axis", new_axis=num_chars)
         beta = repeat(beta, "h w -> h w new_axis", new_axis=num_chars)

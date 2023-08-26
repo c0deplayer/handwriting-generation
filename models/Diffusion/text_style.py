@@ -92,13 +92,17 @@ class TextStyleEncoder(nn.Module):
         self.text_ffn = FeedForwardNetwork(d_model, d_model, hidden_size=d_model * 2)
         self.affine_3 = AffineTransformLayer(in_features // 8, d_model)
 
-    def forward(self, batch: tuple[Tensor, ...]) -> Tensor:
+    def forward(self, text: Tensor, style: Tensor, sigma: Tensor) -> Tensor:
         """
         _summary_
 
         Parameters
         ----------
-        batch: tuple[Tensor, ...])
+        text: Tensor
+            _description_
+        style: Tensor
+            _description_
+        sigma: Tensor
             _description_
 
         Returns
@@ -106,20 +110,19 @@ class TextStyleEncoder(nn.Module):
         Tensor
             _description_
         """
-        text, style, sigma = batch
-
+        
         style = reshape_up(self.dropout(style), factor=5)
 
         style = self.layer_norm(self.style_ffn(style))
-        style = self.affine_0((style, sigma))
+        style = self.affine_0(style, sigma)
 
         text = self.embedding(text)
-        text = self.affine_1((self.layer_norm(text), sigma))
+        text = self.affine_1(self.layer_norm(text), sigma)
 
         mha, _ = self.mha(text, style, style)
-        text = self.affine_2((self.layer_norm(text + mha), sigma))
+        text = self.affine_2(self.layer_norm(text + mha), sigma)
 
         text = self.layer_norm(self.text_ffn(text))
-        text = self.affine_3((text, sigma))
+        text = self.affine_3(text, sigma)
 
         return text

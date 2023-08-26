@@ -23,7 +23,7 @@ from .inv_sqrt_scheduler import InverseSqrtScheduler
 from .text_style import StyleExtractor, TextStyleEncoder
 
 
-class AttentionalBlock(nn.Module):
+class AttentionBlock(nn.Module):
     def __init__(
         self,
         in_features: int,
@@ -80,14 +80,20 @@ class AttentionalBlock(nn.Module):
         self.affine_3 = AffineTransformLayer(in_features // 12, d_model)
 
     def forward(
-        self, batch: tuple[Tensor, Tensor, Tensor, Tensor]
+        self, x: Tensor, text: Tensor, sigma: Tensor, *, mask: Tensor
     ) -> tuple[Tensor, Tensor]:
         """
         _summary_
 
         Parameters
         ----------
-        batch : tuple[Tensor, Tensor, Tensor, Tensor]
+        x : Tensor
+            _description_
+        text : Tensor
+            _description_
+        sigma : Tensor
+            _description_
+        mask : Tensor
             _description_
 
         Returns
@@ -96,10 +102,8 @@ class AttentionalBlock(nn.Module):
             _description_
         """
 
-        x, text, sigma, text_mask = batch
-
         text = self.dense_layer(F.silu(text))
-        text = self.affine_0((self.layer_norm(text), sigma))
+        text = self.affine_0(self.layer_norm(text), sigma)
         text_pos = text + self.text_pos[:, : text.size(1)]
 
         # text_mask = rearrange(text_mask, "b h w c -> b (h w c)")
@@ -107,18 +111,18 @@ class AttentionalBlock(nn.Module):
             x = rearrange(x, "b h w -> b w h")
 
         x_pos = x + self.stroke_pos[:, : x.size(1)]
-        x_2, attention = self.mha_0(x_pos, text_pos, text, mask=text_mask)
+        x_2, attention = self.mha_0(x_pos, text_pos, text, mask=mask)
         x_2 = self.layer_norm(self.dropout(x_2))
-        x_2 = self.affine_1((x_2, sigma)) + x
+        x_2 = self.affine_1(x_2, sigma) + x
 
         x_2_pos = x_2 + self.stroke_pos[:, : x.size(1)]
         x_3, _ = self.mha_1(x_2_pos, x_2_pos, x_2)
         x_3 = self.layer_norm(x_2 + self.dropout(x_3))
-        x_3 = self.affine_2((x_3, sigma))
+        x_3 = self.affine_2(x_3, sigma)
 
         x_4 = self.ff_network(x_3)
         x_4 = self.dropout(x_4) + x_3
-        output = self.affine_3((self.layer_norm(x_4), sigma))
+        output = self.affine_3(self.layer_norm(x_4), sigma)
 
         return output, attention
 
@@ -169,7 +173,7 @@ class DiffusionModel(pl.LightningModule):
         self.avg_pool = nn.AvgPool1d(2)
 
         self.enc_1 = ConvBlock(c1, c1, c2)
-        self.enc_2 = AttentionalBlock(
+        self.enc_2 = AttentionBlock(
             c2 * 2,
             c2,
             num_heads=3,
@@ -179,7 +183,7 @@ class DiffusionModel(pl.LightningModule):
         )
 
         self.enc_3 = ConvBlock(c1, c2, c3)
-        self.enc_4 = AttentionalBlock(
+        self.enc_4 = AttentionBlock(
             c2 * 2,
             c3,
             num_heads=4,
@@ -191,7 +195,7 @@ class DiffusionModel(pl.LightningModule):
         self.attention_dense = nn.Linear(c3, c2 * 2)
         self.attention_layers = nn.ModuleList(
             [
-                AttentionalBlock(
+                AttentionBlock(
                     c2 * 2,
                     c2 * 2,
                     6,
@@ -218,15 +222,13 @@ class DiffusionModel(pl.LightningModule):
 
         self.save_hyperparameters()
 
-    def forward(
-        self, batch: tuple[Tensor, Tensor, Tensor, Tensor]
-    ) -> tuple[Tensor, Tensor, Tensor]:
+    def forward(self, batch: tuple[Tensor, ...]) -> tuple[Tensor, Tensor, Tensor]:
         """
         _summary_
 
         Parameters
         ----------
-        batch : tuple[Tensor, Tensor, Tensor, Tensor]
+        batch : tuple[Tensor, ...]
             _description_
 
         Returns
@@ -235,27 +237,33 @@ class DiffusionModel(pl.LightningModule):
             _description_
         """
 
-        strokes, text, sigma, style = batch
+        x, text, sigma, style = batch
 
         sigma = self.sigma_ff_network(sigma)
         text_mask = utils.create_padding_mask(text)
-        text = self.text_style_encoder((text, style, sigma))
+        text = self.text_style_encoder(text, style, sigma)
 
-        x = self.input_dense(strokes)
+        x = self.input_dense(x)
         x = rearrange(x, "b h w -> b w h")
-        h_1 = self.enc_0((x, sigma))
+        h_1 = self.enc_0(x, sigma)
         h_2 = self.avg_pool(h_1)
 
-        h_2 = self.enc_1((h_2, sigma))
+        h_2 = self.enc_1(h_2, sigma)
         h_2, _ = self.enc_2(
-            (h_2, text, sigma, text_mask),
+            h_2,
+            text,
+            sigma,
+            mask=text_mask,
         )
         h_2 = rearrange(h_2, "b h w -> b w h")
         h_3 = self.avg_pool(h_2)
 
-        h_3 = self.enc_3((h_3, sigma))
+        h_3 = self.enc_3(h_3, sigma)
         h_3, _ = self.enc_4(
-            (h_3, text, sigma, text_mask),
+            h_3,
+            text,
+            sigma,
+            mask=text_mask,
         )
         h_3 = rearrange(h_3, "b h w -> b w h")
         x = self.avg_pool(h_3)
@@ -264,23 +272,21 @@ class DiffusionModel(pl.LightningModule):
         x = self.attention_dense(x)
         for attention_layer in self.attention_layers:
             x, attention = attention_layer(
-                (
-                    x,
-                    text,
-                    sigma,
-                    text_mask,
-                ),
+                x,
+                text,
+                sigma,
+                mask=text_mask,
             )
 
         x = rearrange(x, "b h w -> b w h")
         x = self.up_sample(x) + self.skip_conv_2(h_3)
-        x = self.dec_2((x, sigma))
+        x = self.dec_2(x, sigma)
 
         x = self.up_sample(x) + self.skip_conv_1(h_2)
-        x = self.dec_1((x, sigma))
+        x = self.dec_1(x, sigma)
 
         x = self.up_sample(x) + self.skip_conv_0(h_1)
-        x = self.dec_0((x, sigma))
+        x = self.dec_0(x, sigma)
 
         x = rearrange(x, "b h w -> b w h")
         output = self.output_dense(x)

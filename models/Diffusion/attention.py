@@ -60,7 +60,7 @@ class MultiHeadAttention(nn.Module):
         key = self.key(k)
         value = self.value(v)
 
-        attention, attention_weights = self.__scaled_dot_product_attention(
+        attention, attention_weights = self.scaled_dot_product_attention(
             query, key, value, mask=mask
         )
 
@@ -82,7 +82,7 @@ class MultiHeadAttention(nn.Module):
             return self.output(attention)
 
     @staticmethod
-    def __scaled_dot_product_attention(
+    def scaled_dot_product_attention(
         q: Tensor, k: Tensor, v: Tensor, *, mask: Tensor = None
     ) -> tuple[Tensor, Tensor]:
         scores = q @ k.transpose(-2, -1)
@@ -123,13 +123,15 @@ class AffineTransformLayer(nn.Module):
         # * `bias_initializer='ones'` in original implementation
         self.gamma_emb.bias.data.fill_(1.0)
 
-    def forward(self, batch: tuple[Tensor, Tensor]) -> Tensor:
+    def forward(self, x: Tensor, sigma: Tensor) -> Tensor:
         """
         _summary_
 
         Parameters
         ----------
-        batch : tuple[Tensor, Tensor]
+        x : Tensor
+            _description_
+        sigma : Tensor
             _description_
 
         Returns
@@ -137,8 +139,6 @@ class AffineTransformLayer(nn.Module):
         Tensor
             _description_
         """
-
-        x, sigma = batch
 
         gammas = self.gamma_emb(sigma)
         betas = self.beta_emb(sigma)
