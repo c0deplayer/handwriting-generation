@@ -123,38 +123,3 @@ class FeedForwardNetwork(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         return self.ff_net(x)
-
-
-# def feed_forward_network(
-#     in_features: int, out_features: int, *, hidden: int = 768, act_before: bool = True
-# ) -> nn.Sequential:
-#     """
-#     _summary_
-#
-#     Parameters
-#     ----------
-#     in_features : int
-#         _description_
-#     out_features : int
-#         _description_
-#     hidden : int, optional
-#         _description_, by default 768
-#     act_before : bool, optional
-#         _description_, by default True
-#
-#     Returns
-#     -------
-#     nn.Sequential
-#         _description_
-#     """
-#
-#     ff_layers = [
-#         nn.Linear(in_features, hidden),
-#         nn.SiLU(),
-#         nn.Linear(hidden, out_features),
-#     ]
-#
-#     if act_before:
-#         ff_layers.insert(0, nn.SiLU())
-#
-#     return nn.Sequential(*ff_layers)
