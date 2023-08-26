@@ -15,17 +15,11 @@ from torch.optim.lr_scheduler import LRScheduler
 
 from data.tokenizer import Tokenizer
 from data.utils import get_image, pad_image
-# noinspection PyPackages
 from . import utils
-# noinspection PyPackages
 from .attention import AffineTransformLayer, MultiHeadAttention
-# noinspection PyPackages
 from .cnn import ConvBlock, FeedForwardNetwork
-# noinspection PyPackages
 from .encoder import PositionalEncoder
-# noinspection PyPackages
 from .inv_sqrt_scheduler import InverseSqrtScheduler
-# noinspection PyPackages
 from .text_style import StyleExtractor, TextStyleEncoder
 
 
