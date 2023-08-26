@@ -185,7 +185,8 @@ class UNetModel(nn.Module):
         time_steps: Tensor,
         *,
         context: Tensor = None,
-        writer_id: Tensor = None,
+        writer_id: Tensor | tuple[int, int] = None,
+        interpolation: bool = False,
     ) -> Tensor:
         if writer_id is None or self.n_style_classes is None:
             raise RuntimeError(
@@ -201,7 +202,14 @@ class UNetModel(nn.Module):
                 f"Expected size to be {x.size(1)}, got {writer_id.size()}"
             )
 
-        t_emb = t_emb + self.label_emb(writer_id)
+        if interpolation:
+            t_emb = self.interpolation(writer_id, t_emb, device=x.device)
+        elif not isinstance(writer_id, Tensor):
+            raise RuntimeError(
+                f"Expected writer_id to be Tensor, got {type(writer_id)}"
+            )
+        else:
+            t_emb = t_emb + self.label_emb(writer_id)
 
         if context is not None:
             context = self.word_emb(context)
@@ -216,3 +224,30 @@ class UNetModel(nn.Module):
             x = module(x, t_emb, context)
 
         return self.out(x)
+
+    def interpolation(
+        self,
+        writer_id: tuple[int, int],
+        t_emb: Tensor,
+        *,
+        mix_rate: float = 1.0,
+        device: torch.device,
+    ) -> Tensor:
+        if not isinstance(writer_id, tuple):
+            raise RuntimeError(
+                f"Expected writer_id to be tuple for interpolation, got {type(writer_id)}"
+            )
+        if writer_id[0] == writer_id[1]:
+            raise RuntimeError("Writer IDs must be unique")
+
+        s1, s2 = writer_id
+        y1 = torch.LongTensor([s1], device=device)
+        y2 = torch.LongTensor([s2], device=device)
+
+        y1 = self.label_emb(y1).to(device=device)
+        y2 = self.label_emb(y2).to(device=device)
+
+        y = (1 - mix_rate) * y1 - mix_rate * y2
+        y = y.to(device=device)
+
+        return t_emb + self.label_emb(y)
