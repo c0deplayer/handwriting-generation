@@ -66,15 +66,69 @@ class UNetModel(nn.Module):
         if n_style_classes is not None:
             self.label_emb = nn.Embedding(n_style_classes, d_time_emb)
 
+        input_block_channels = [channels]
+        channels_list = [channels * m for m in channel_multipliers]
+
+        input_block_channels = self.__init_input_blocks(
+            attention_levels,
+            channels,
+            channels_list,
+            d_cond,
+            d_time_emb,
+            dropout,
+            heads,
+            in_channels,
+            input_block_channels,
+            levels,
+            res_layers,
+            tf_layers,
+        )
+
+        self.__init_middle_blocks(
+            channels, d_cond, d_time_emb, dropout, heads, tf_layers
+        )
+
+        self.__init_output_blocks(
+            attention_levels,
+            channels,
+            channels_list,
+            d_cond,
+            d_time_emb,
+            dropout,
+            heads,
+            input_block_channels,
+            levels,
+            res_layers,
+            tf_layers,
+        )
+
+        self.out = nn.Sequential(
+            GroupNorm32(32, channels),
+            nn.SiLU(),
+            nn.Conv2d(channels, out_channels, kernel_size=3, padding=1),
+        )
+
+    def __init_input_blocks(
+        self,
+        attention_levels: tuple[int],
+        channels: int,
+        channels_list: list[int],
+        d_cond: int,
+        d_time_emb: int,
+        dropout: float,
+        heads: int,
+        in_channels: int,
+        input_block_channels: list[int],
+        levels: int,
+        res_layers: int,
+        tf_layers: int,
+    ) -> list[int]:
         self.input_blocks = nn.ModuleList()
         self.input_blocks.append(
             TimestepEmbedSequential(
                 nn.Conv2d(in_channels, channels, kernel_size=3, padding=1)
             )
         )
-
-        input_block_channels = [channels]
-        channels_list = [channels * m for m in channel_multipliers]
 
         for i in range(levels):
             for _ in range(res_layers):
@@ -107,6 +161,17 @@ class UNetModel(nn.Module):
                 self.input_blocks.append(TimestepEmbedSequential(DownSample(channels)))
                 input_block_channels.append(channels)
 
+        return input_block_channels
+
+    def __init_middle_blocks(
+        self,
+        channels: int,
+        d_cond: int,
+        d_time_emb: int,
+        dropout: float,
+        heads: int,
+        tf_layers: int,
+    ) -> None:
         self.middle_block = TimestepEmbedSequential(
             ResBlock(channels, d_time_emb),
             SpatialTransformer(
@@ -120,6 +185,20 @@ class UNetModel(nn.Module):
             ResBlock(channels, d_time_emb),
         )
 
+    def __init_output_blocks(
+        self,
+        attention_levels: tuple[int],
+        channels: int,
+        channels_list: list[int],
+        d_cond: int,
+        d_time_emb: int,
+        dropout: float,
+        heads: int,
+        input_block_channels: list[int],
+        levels: int,
+        res_layers: int,
+        tf_layers: int,
+    ) -> None:
         self.output_blocks = nn.ModuleList()
 
         for i in reversed(range(levels)):
@@ -149,12 +228,6 @@ class UNetModel(nn.Module):
                     layers.append(UpSample(channels))
 
                 self.output_blocks.append(TimestepEmbedSequential(*layers))
-
-        self.out = nn.Sequential(
-            GroupNorm32(32, channels),
-            nn.SiLU(),
-            nn.Conv2d(channels, out_channels, kernel_size=3, padding=1),
-        )
 
     def time_step_embedding(
         self, time_steps: Tensor, *, max_period: int = 10000, repeat_only: bool = False
