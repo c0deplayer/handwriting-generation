@@ -23,7 +23,7 @@ class GeGLU(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         if x.shape[-1] % 2 == 0:
-            raise RuntimeError("")
+            raise RuntimeError("The last dimension is not an even number")
 
         return self.geglu(x)
 
