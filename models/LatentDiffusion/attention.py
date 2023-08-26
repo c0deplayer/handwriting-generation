@@ -126,20 +126,20 @@ class AttentionBlock(nn.Module):
             self.heads = channels // head_channels
 
         self.norm = GroupNorm32(32, channels)
-        self.conv_in = nn.Conv2d(channels, channels * 3, kernel_size=1)
+        self.proj_in = nn.Conv2d(channels, channels * 3, kernel_size=1)
 
-        self.conv_out = nn.Conv2d(channels, channels, kernel_size=1)
+        self.proj_out = nn.Conv2d(channels, channels, kernel_size=1)
 
-        for p in self.conv_out.parameters():
+        for p in self.proj_out.parameters():
             p.detach().zero_()
 
     def forward(self, x: Tensor) -> Tensor:
         # b, c, h, w = x.size()
         x = rearrange(x, "b c h w -> b c (h w)")
-        qkv = self.conv_in(self.norm(x))
+        qkv = self.proj_in(self.norm(x))
 
         h = scaled_dot_product_attention(qkv, self.heads)
-        h = self.conv_out(h)
+        h = self.proj_out(h)
 
         return rearrange((x + h), "b c (h w) -> b c h w")
 
