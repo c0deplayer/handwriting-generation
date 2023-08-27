@@ -15,3 +15,4 @@
 7. [Deep Residual Learning for Image Recognition](https://arxiv.org/pdf/1512.03385.pdf)
 8. [GLU Variants Improve Transformer](https://arxiv.org/pdf/2002.05202.pdf)
 9. [IAM Handwriting Database & IAM On-Line Handwriting Database](https://fki.tic.heia-fr.ch/databases)
+10. [U-Net: Convolutional Networks for Biomedical Image Segmentation](https://arxiv.org/pdf/1505.04597v1.pdf)
