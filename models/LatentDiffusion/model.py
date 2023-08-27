@@ -3,9 +3,9 @@ from typing import Any
 import lightning.pytorch as pl
 import torch
 from diffusers import AutoencoderKL
-from einops import rearrange
 from torch import nn, Tensor
 
+from . import utils
 from .activation import GeGLU
 from .unet import UNetModel
 
@@ -56,18 +56,6 @@ class DiffusionWrapper(nn.Module):
             interpolation=interpolation,
         )
 
-    @staticmethod
-    def noise_image(
-        x: Tensor, time_step: Tensor, alpha_bar: Tensor
-    ) -> tuple[Tensor, Tensor]:
-        sqrt_alpha_bar = rearrange(torch.sqrt(alpha_bar[time_step]), "v -> v 1 1 1")
-        sqrt_one_minus_alpha_bar = rearrange(
-            torch.sqrt(1 - alpha_bar[time_step]), "v -> v 1 1 1"
-        )
-        noise = torch.randn_like(x)
-
-        return sqrt_alpha_bar * x + sqrt_one_minus_alpha_bar * noise, noise
-
 
 class LatentDiffusion(pl.LightningModule):
     def __init__(
@@ -110,7 +98,7 @@ class LatentDiffusion(pl.LightningModule):
         )
 
         time_step = torch.randint(low=1, high=self.n_steps, size=(images.size(0),))
-        x_t, noise = self.model.noise_image(images, time_step, self.alpha_bar)
+        x_t, noise = utils.noise_image(images, time_step, self.alpha_bar)
 
         return self.model(
             x_t,
