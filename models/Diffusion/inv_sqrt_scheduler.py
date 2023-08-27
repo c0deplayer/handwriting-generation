@@ -37,6 +37,7 @@ class InverseSqrtScheduler(LRScheduler):
         TypeError
             _description_
         """
+        
         if not isinstance(optimizer, Optimizer):
             raise TypeError(f"{type(optimizer).__name__} is not an Optimizer")
         if lr_mul <= 0.0:

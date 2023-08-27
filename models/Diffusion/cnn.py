@@ -88,7 +88,6 @@ class ConvBlock(nn.Module):
         x = self.dropout(self.affine_1(x, alpha))
 
         x = rearrange(x, "b h w -> b w h")
-        # x = x.permute(0, 2, 1)
         x = self.fc(F.silu(x))
         x = self.dropout(self.affine_2(x, alpha))
         x = rearrange(x, "b h w -> b w h")

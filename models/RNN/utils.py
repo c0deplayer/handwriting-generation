@@ -146,9 +146,8 @@ def get_mean_predictions(
         )
 
         loc = torch.tensor([mu_1.item(), mu_2.item()], device=device)
-        gaussian_multi = torch.distributions.MultivariateNormal(loc, covariance_matrix)
+        value = torch.distributions.MultivariateNormal(loc, covariance_matrix).sample()
 
-        value = gaussian_multi.sample()
         x, y = value[0].item(), value[1].item()
 
     eos_flag = 1 if eos > 0.5 else 0

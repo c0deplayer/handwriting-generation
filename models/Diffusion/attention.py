@@ -18,9 +18,9 @@ class PrepareForMultiHeadAttention(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         x = self.linear(x)
 
-        return self.__split_heads(x)
+        return self.split_heads(x)
 
-    def __split_heads(self, x: Tensor) -> Tensor:
+    def split_heads(self, x: Tensor) -> Tensor:
         return rearrange(
             x,
             "b s (h d) -> b h s d",
@@ -66,7 +66,6 @@ class MultiHeadAttention(nn.Module):
 
         attention = self.dropout(attention)
 
-        # attention = rearrange(attention_weights, "b n s c -> b s n c")
         attention = rearrange(
             attention,
             "b h s d -> b s (h d)",
@@ -116,12 +115,12 @@ class AffineTransformLayer(nn.Module):
 
         super().__init__()
 
-        self.gamma_emb = nn.Linear(in_features, out_features)
-        self.beta_emb = nn.Linear(in_features, out_features)
+        self.gamma = nn.Linear(in_features, out_features)
+        self.beta = nn.Linear(in_features, out_features)
         self.channel_first_input = channel_first_input
 
-        # * `bias_initializer='ones'` in original implementation
-        self.gamma_emb.bias.data.fill_(1.0)
+        # * `bias_initializer='ones'` in original implementation *
+        self.gamma.bias.data.fill_(1.0)
 
     def forward(self, x: Tensor, sigma: Tensor) -> Tensor:
         """
@@ -140,8 +139,8 @@ class AffineTransformLayer(nn.Module):
             _description_
         """
 
-        gammas = self.gamma_emb(sigma)
-        betas = self.beta_emb(sigma)
+        gammas = self.gamma(sigma)
+        betas = self.beta(sigma)
 
         if self.channel_first_input:
             return rearrange(
