@@ -13,7 +13,7 @@ from .utils import GroupNorm32
 
 # noinspection PyMethodOverriding
 class TimestepEmbedSequential(nn.Sequential):
-    def forward(self, x: Tensor, t_emb: Tensor, *, context: Tensor = None) -> Tensor:
+    def forward(self, x: Tensor, t_emb: Tensor, context: Tensor = None) -> Tensor:
         for layer in self:
             if isinstance(layer, ResBlock):
                 x = layer(x, t_emb)
