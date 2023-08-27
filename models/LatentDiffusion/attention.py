@@ -20,7 +20,9 @@ class CrossAttention(nn.Module):
         self.d_head = d_head
         self.scale = d_head**-0.5
 
-        d_cond = d_model if d_cond is None else d_cond
+        if d_cond is None:
+            d_cond = d_model
+
         self.to_q = nn.Linear(d_model, d_head * n_heads, bias=False)
         self.to_q = nn.Linear(d_cond, d_head * n_heads, bias=False)
         self.to_q = nn.Linear(d_cond, d_head * n_heads, bias=False)

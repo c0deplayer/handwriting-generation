@@ -21,7 +21,9 @@ class FeedForwardNetwork(nn.Module):
     ) -> None:
         super().__init__()
 
-        d_out = d_model if d_out is None else d_out
+        if d_out is None:
+            d_out = d_model
+
         self.ff_net = nn.Sequential(
             nn.Linear(d_model, d_model * d_mult),
             GeGLU(d_model, d_model * d_mult),
