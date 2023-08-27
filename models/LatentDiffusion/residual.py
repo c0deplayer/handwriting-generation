@@ -1,3 +1,4 @@
+from einops import rearrange
 from torch import nn, Tensor
 
 from .utils import GroupNorm32
@@ -43,7 +44,7 @@ class ResBlock(nn.Module):
 
         emb = self.emb_layers(emb).type(h.dtype)
 
-        h += emb[:, :, None, None]
+        h += rearrange(emb, "b v -> b v 1 1")
 
         h = self.out_layers(h)
 

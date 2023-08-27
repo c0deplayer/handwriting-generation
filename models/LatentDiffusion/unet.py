@@ -2,7 +2,7 @@ import math
 
 import torch
 import torch.nn as nn
-from einops import repeat
+from einops import repeat, rearrange
 from torch import Tensor
 
 from .encoder import CharacterEncoder
@@ -243,7 +243,9 @@ class UNetModel(nn.Module):
             / half,
         ).to(device=time_steps.device)
 
-        args = time_steps[:, None].float() * frequencies[None]
+        args = rearrange(time_steps, "v -> v 1").float() * rearrange(
+            frequencies, "v -> 1 v"
+        )
 
         embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
 
