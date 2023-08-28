@@ -60,7 +60,7 @@ class DiffusionWrapper(nn.Module):
         )
 
 
-class LatentDiffusion(pl.LightningModule):
+class LatentDiffusionModel(pl.LightningModule):
     def __init__(
         self,
         unet_params: dict[str, Any],
