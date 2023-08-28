@@ -11,12 +11,21 @@ class ConfigLatentDiffusion(YAMLWizard, key_transform="SNAKE"):
     img_height: int
     img_width: int
     max_text_len: int
+    max_files: int
     device: str
 
+    autoencoder_path: str
     channels: int
     emb_dim: int
-    num_heads: int
-    num_res_block: int
+    n_heads: int
+    res_layers: int
+    n_steps: int
+    d_cond: int
+    beta_start: float
+    beta_end: float
+    attention_levels: tuple
+    channel_multipliers: tuple
+    drop_rate: float
 
     data_path: str
     checkpoint_path: str

@@ -8,13 +8,22 @@ import yaml
 from lightning.pytorch.callbacks import RichModelSummary, RichProgressBar
 from lightning.pytorch.plugins import MixedPrecisionPlugin
 
-from configs.config import ConfigDiffusion, ConfigRNN
+from configs.config import ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion
 from data.dataset import DataModule, IAMDataset, IAMonDataset
 from models.Diffusion.model import DiffusionModel
+from models.LatentDiffusion.model import LatentDiffusionModel
 from models.RNN.model import RecurrentNeuralNetwork
 
-MODELS = {"Diffusion": DiffusionModel, "RNN": RecurrentNeuralNetwork}
-CONFIGS = {"Diffusion": ConfigDiffusion, "RNN": ConfigRNN}
+MODELS = {
+    "Diffusion": DiffusionModel,
+    "RNN": RecurrentNeuralNetwork,
+    "LatentDiffusion": LatentDiffusionModel,
+}
+CONFIGS = {
+    "Diffusion": ConfigDiffusion,
+    "RNN": ConfigRNN,
+    "LatentDiffusion": ConfigLatentDiffusion,
+}
 DATASETS = {
     "Diffusion": IAMonDataset,
     "RNN": IAMonDataset,
@@ -126,7 +135,27 @@ if __name__ == "__main__":
                 ],
             )
     else:
-        raise NotImplemented
+        kwargs_model = dict(
+            unet_params=dict(
+                in_channels=config.channels,
+                out_channels=config.channels,
+                channels=config.emb_dim,
+                res_layers=config.res_layers,
+                vocab_size=config.vocab_size,
+                attention_levels=config.attention_levels,
+                channel_multipliers=config.channel_multipliers,
+                heads=config.n_heads,
+                d_cond=config.d_cond,
+                n_style_classes=340,  # TODO: This should not be hardcoded !
+                dropout=config.drop_rate,
+                max_seq_len=config.max_text_len,
+            ),
+            autoencoder_path=config.autoencoder_path,
+            n_steps=config.n_steps,
+            beta_start=config.beta_start,
+            beta_end=config.beta_end,
+            img_size=(config.img_height, config.img_width),
+        )
 
     # * Only for university's server, which have two GPUs *
     if config.device == "cuda" and args.remote:

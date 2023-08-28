@@ -14,10 +14,8 @@ from torchvision.transforms import Compose
 
 from configs.config import ConfigDiffusion, ConfigLatentDiffusion, ConfigRNN
 from models.Diffusion.text_style import StyleExtractor
-
 # noinspection PyPackages
 from . import utils
-
 # noinspection PyPackages
 from .tokenizer import Tokenizer
 
@@ -48,18 +46,25 @@ class DataModule(pl.LightningDataModule):
         self.dataset = dataset
         self.__config = config
         self.batch_size = config.batch_size
-        self.max_seq_len = config.max_seq_len
         self.max_text_len = config.max_text_len
         self.max_files = config.max_files
-        self.train_size = config.train_size
-        self.val_size = 1.0 - self.train_size
 
-        if isinstance(config, (ConfigDiffusion, ConfigLatentDiffusion)):
+        # TODO: temporary solution, find better one
+        if isinstance(config, ConfigDiffusion):
+            self.img_height = config.img_height
+            self.img_width = config.img_width
+            self.train_size = config.train_size
+            self.val_size = 1.0 - self.train_size
+            self.max_seq_len = config.max_seq_len
+        elif isinstance(config, ConfigLatentDiffusion):
             self.img_height = config.img_height
             self.img_width = config.img_width
         elif isinstance(config, ConfigRNN):
             self.img_height = 90
             self.img_width = 1400
+            self.train_size = config.train_size
+            self.val_size = 1.0 - self.train_size
+            self.max_seq_len = config.max_seq_len
         else:
             raise RuntimeError(
                 f"Expected ConfigDiffusion | ConfigRNN | ConfigLatentDiffusion, got {str(config)}"
@@ -82,6 +87,7 @@ class DataModule(pl.LightningDataModule):
                     img_height=self.img_height,
                     img_width=self.img_width,
                     max_text_len=self.max_text_len,
+                    max_files=self.max_files,
                     dataset_type="train",
                     transforms=transforms,
                 )
@@ -89,6 +95,7 @@ class DataModule(pl.LightningDataModule):
                     config=self.__config,
                     img_height=self.img_height,
                     img_width=self.img_width,
+                    max_files=self.max_files,
                     max_text_len=self.max_text_len,
                     dataset_type="val",
                     transforms=transforms,
@@ -311,12 +318,14 @@ class IAMDataset(Dataset):
         img_height: int,
         img_width: int,
         max_text_len: int,
+        max_files: int,
         dataset_type: Literal["train", "val", "test"],
         transforms: Compose,
         **kwargs,
     ) -> None:
         self.__config = config
         self.max_text_len = max_text_len
+        self.max_files = max_files
         self.transforms = transforms
         self.img_height = img_height
         self.img_width = img_width
@@ -377,6 +386,10 @@ class IAMDataset(Dataset):
             if writer_id not in self.__map_writer_id.keys():
                 self.__map_writer_id[writer_id] = len(self.__map_writer_id)
 
+            if self.max_files and len(dataset) >= self.max_files:
+                self.__dataset = dataset
+                return
+
         self.__dataset = dataset
 
     @property
@@ -397,8 +410,8 @@ class IAMDataset(Dataset):
     def __getitem__(self, index: int) -> tuple[Tensor, Tensor, Tensor]:
         w_index = self.dataset[index]["writer"]
 
-        writer_id = torch.IntTensor(self.map_writer_id[w_index])
+        writer_id = torch.tensor(self.map_writer_id[w_index], dtype=torch.int32)
         image = self.dataset[index]["image"]
-        label = torch.LongTensor(self.dataset[index]["label"])
+        label = torch.tensor(self.dataset[index]["label"], dtype=torch.long)
 
         return writer_id, image, label

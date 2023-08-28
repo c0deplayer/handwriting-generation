@@ -6,10 +6,25 @@ batch_size: 96
 img_height: 64
 img_width: 256
 max_text_len: 10
+max_files: 0
 vocab: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
+autoencoder_path: "runwayml/stable-diffusion-v1-5"
 max_epochs: 1000
 channels: 4
 emb_dim: 320
-num_heads: 4
-num_res_block: 1
+n_heads: 4
+res_layers: 1
+n_steps: 1000
+d_cond: 320
+beta_start: 0.0001
+beta_end: 0.02
+attention_levels: !!python/tuple
+  - 1
+  - 1
+
+channel_multipliers: !!python/tuple
+  - 1
+  - 1
+
+drop_rate: 0.0
