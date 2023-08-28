@@ -180,6 +180,9 @@ class IAMonDataset(Dataset):
         self._std = utils.compute_std(self.dataset)
 
     def __load_data(self) -> None:
+        transform = torchvision.transforms.Compose(
+            [torchvision.transforms.PILToTensor()]
+        )
         dataset = []
         raw_data_path = Path(self.config.data_path)
         ascii_path = raw_data_path / "ascii"
@@ -215,24 +218,26 @@ class IAMonDataset(Dataset):
                 text = utils.fill_text(text, max_len=self.max_text_len)
                 onehot = eye[text].numpy()
 
-                image = utils.get_image(path_file_tif, height=self.img_height)
+                image = utils.get_image(
+                    path_file_tif, width=self.img_width, height=self.img_height
+                )
 
-                if strokes is None or image.shape[1] >= self.img_width:
+                if strokes is None or image.size[0] >= self.img_width:
                     continue
 
                 image = utils.pad_image(
                     image, width=self.img_width, height=self.img_height
                 )
-                writer_image = torch.tensor(image, dtype=torch.float32)
+                writer_image = transform(image).to(torch.float32)
                 if self.diffusion:
-                    writer_image = rearrange(writer_image, "h w -> 1 1 h w")
+                    writer_image = rearrange(writer_image, "1 h w -> 1 1 h w")
 
                     with torch.no_grad():
                         style = self.style_extractor(writer_image)
                 else:
-                    style = rearrange(writer_image, "h w -> 1 h w")
+                    style = writer_image
 
-                style = rearrange(style, "1 h w -> w h").numpy()
+                style = rearrange(style, "1 h w -> w h")
 
                 dataset.append(
                     {
@@ -281,7 +286,7 @@ class IAMonDataset(Dataset):
         if self.diffusion:
             strokes = torch.tensor(self.dataset[index]["strokes"], dtype=torch.float32)
             text = torch.tensor(self.dataset[index]["text"], dtype=torch.int32)
-            style = torch.tensor(self.dataset[index]["style"], dtype=torch.float32)
+            style = self.dataset[index]["style"]
 
             strokes = self.normalize(strokes)
 
@@ -330,6 +335,7 @@ class IAMDataset(Dataset):
 
         self.__map_writer_id = {}
         self.__load_data()
+        print(f"Length of writer styles -- {len(self.map_writer_id)}")
 
     def __load_data(self) -> None:
         dataset = []
@@ -338,12 +344,20 @@ class IAMDataset(Dataset):
         for line in track(self.dataset_txt, description="Preparing IAM Dataloader..."):
             parts = line.split(" ")
             writer_id, image_id = parts[0].split(",")[0], parts[0].split(",")[1]
-            label = parts[1]
+            label = parts[1].rstrip()
+            image_parts = image_id.split("-")
+            f_folder, s_folder = (
+                image_parts[0],
+                f"{image_parts[0]}-{image_parts[1]}",
+            )
 
-            img_path = raw_data_path / f"{image_id}.png"
+            img_path = raw_data_path / f"words/{f_folder}/{s_folder}/{image_id}.png"
 
-            image = utils.get_image_iam(
-                img_path, width=self.img_width, height=self.img_height
+            image = utils.get_image(
+                img_path,
+                width=self.img_width,
+                height=self.img_height,
+                latent=True,
             )
             image = utils.pad_image(image, width=self.img_width, height=self.img_height)
             if self.transforms is not None:

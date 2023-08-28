@@ -3,9 +3,9 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
-import cv2
 import numpy as np
 import torch
+from PIL import Image, ImageOps
 from numpy.linalg import norm
 from rich.progress import track
 from torch import Tensor
@@ -143,7 +143,7 @@ def __combine_strokes(strokes: np.ndarray, n: int) -> np.ndarray:
     return strokes
 
 
-def get_image(path: Path, *, height: int) -> np.ndarray:
+def get_image(path: Path, *, width: int, height: int, latent: bool = False) -> Image:
     """
     _summary_
 
@@ -168,29 +168,30 @@ def get_image(path: Path, *, height: int) -> np.ndarray:
     if not path.is_file():
         raise FileNotFoundError(f"The image was not found: {path}")
 
-    img = cv2.imread(filename=str(path), flags=cv2.IMREAD_GRAYSCALE)
-    img = __remove_whitespaces(img, threshold=127)
+    img = Image.open(path)
 
-    h, w = img.shape
-    img = cv2.resize(
-        src=img, dsize=(height * w // h, height), interpolation=cv2.INTER_CUBIC
-    )
+    if not latent:
+        if img.mode != "L":
+            img = img.convert("L")
 
-    return img
+        # noinspection PyTypeChecker
+        img = __remove_whitespaces(np.array(img).astype("uint8"), threshold=127)
+        img = Image.fromarray(img, mode="L")
 
+        w, h = img.size
+        img = img.resize(size=(w * height // h, height), resample=Image.BILINEAR)
 
-# TODO: TMP Solution, try to make one universal function
-def get_image_iam(path: Path, *, width: int, height: int) -> np.ndarray:
-    if not path.is_file():
-        raise FileNotFoundError(f"The image was not found: {path}")
+    else:
+        if img.mode != "RGB":
+            img = img.convert("RGB")
 
-    img = cv2.imread(filename=str(path))
-    h, w = img.shape
+        w, h = img.size
 
-    img = cv2.resize(src=img, dsize=(height * w // h, height))
+        img = img.resize(size=(w * height // h, height), resample=Image.ANTIALIAS)
+        w, h = img.size
 
-    if w > width:
-        img = cv2.resize(src=img, dsize=(width, height))
+        if w > width:
+            img = img.resize(size=(width, height), resample=Image.ANTIALIAS)
 
     return img
 
@@ -285,9 +286,7 @@ def fill_text(text: list[int], *, max_len: int, pad_value: int = 0) -> np.ndarra
     return text
 
 
-def pad_image(
-    img: np.ndarray, *, width: int, height: int, fill_value: int = 255
-) -> np.ndarray:
+def pad_image(img: Image, *, width: int, height: int) -> Image:
     """
     _summary_
 
@@ -299,20 +298,16 @@ def pad_image(
         _description_
     height : int
         _description_
-    fill_value : int, optional
-        _description_, by default 255
 
     Returns
     -------
     np.ndarray
         _description_
     """
-
-    pad_len = width - img.shape[1]
-    padding = np.full((height, pad_len), fill_value, dtype=np.uint8)
-
-    img = np.concatenate((img, padding), axis=1)
-    return img
+    if img.size[0] > width:
+        return img
+    else:
+        return ImageOps.pad(image=img, size=(width, height), color="white")
 
 
 def compute_mean(dataset: list[dict[str, Any]]) -> Tensor:
