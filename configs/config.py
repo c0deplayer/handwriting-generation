@@ -18,7 +18,6 @@ class ConfigLatentDiffusion(YAMLWizard, key_transform="SNAKE"):
     num_heads: int
     num_res_block: int
 
-    interpolation: bool
     data_path: str
     checkpoint_path: str
 
