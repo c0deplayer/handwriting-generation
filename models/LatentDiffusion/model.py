@@ -89,9 +89,8 @@ class LatentDiffusion(pl.LightningModule):
         self,
         batch: tuple[Tensor, ...],
         *,
-        writer_id: Tensor | tuple[int, int] = None,
         interpolation: bool = False,
-    ):
+    ) -> Tensor:
         writers, images, text = batch
 
         images = (
@@ -106,6 +105,6 @@ class LatentDiffusion(pl.LightningModule):
             x_t,
             time_step,
             context=text,
-            writer_id=writer_id,
+            writer_id=writers,
             interpolation=interpolation,
         )
