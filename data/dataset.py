@@ -1,7 +1,7 @@
 import os
 import random
 from pathlib import Path
-from typing import Literal, Any
+from typing import Any, Literal
 
 import lightning.pytorch as pl
 import torch
@@ -12,10 +12,12 @@ from torch import Tensor
 from torch.utils.data import DataLoader, Dataset, random_split
 from torchvision.transforms import Compose
 
-from configs.config import ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion
+from configs.config import ConfigDiffusion, ConfigLatentDiffusion, ConfigRNN
 from models.Diffusion.text_style import StyleExtractor
+
 # noinspection PyPackages
 from . import utils
+
 # noinspection PyPackages
 from .tokenizer import Tokenizer
 
@@ -221,16 +223,14 @@ class IAMonDataset(Dataset):
                 image = utils.pad_image(
                     image, width=self.img_width, height=self.img_height
                 )
+                writer_image = torch.tensor(image, dtype=torch.float32)
                 if self.diffusion:
-                    writer_image = torch.tensor(image, dtype=torch.float32)
                     writer_image = rearrange(writer_image, "h w -> 1 1 h w")
 
                     with torch.no_grad():
                         style = self.style_extractor(writer_image)
                 else:
-                    style = rearrange(
-                        torch.tensor(image, dtype=torch.float32), "h w -> 1 h w"
-                    )
+                    style = rearrange(writer_image, "h w -> 1 h w")
 
                 style = rearrange(style, "1 h w -> w h").numpy()
 
@@ -328,6 +328,7 @@ class IAMDataset(Dataset):
         with open(f"{config.data_path}/{type_dict[dataset_type]}", mode="r") as f:
             self.dataset_txt = f.readlines()
 
+        self.__map_writer_id = {}
         self.__load_data()
 
     def __load_data(self) -> None:
@@ -353,6 +354,9 @@ class IAMDataset(Dataset):
 
             dataset.append({"writer": writer_id, "image": image, "label": label})
 
+            if writer_id not in self.__map_writer_id.keys():
+                self.__map_writer_id[writer_id] = len(self.__map_writer_id)
+
         self.__dataset = dataset
 
     @property
@@ -363,12 +367,18 @@ class IAMDataset(Dataset):
     def dataset(self) -> list[dict[str, Any]]:
         return self.__dataset
 
+    @property
+    def map_writer_id(self) -> dict[str, int]:
+        return self.__map_writer_id
+
     def __len__(self) -> int:
         return len(self.dataset)
 
     def __getitem__(self, index: int) -> tuple[Tensor, Tensor, Tensor]:
-        writer = torch.IntTensor(self.dataset[index]["writer"])
+        w_index = self.dataset[index]["writer"]
+
+        writer_id = torch.IntTensor(self.map_writer_id[w_index])
         image = self.dataset[index]["image"]
         label = torch.LongTensor(self.dataset[index]["label"])
 
-        return writer, image, label
+        return writer_id, image, label
