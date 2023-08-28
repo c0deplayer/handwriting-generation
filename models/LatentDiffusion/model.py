@@ -116,10 +116,10 @@ class LatentDiffusionModel(pl.LightningModule):
     def training_step(self, batch: Tensor, batch_idx: int) -> Tensor:
         noise_pred, noise = self(batch)
 
-        return F.mse_loss(noise_pred, noise, reduce="mean")
+        return F.mse_loss(noise_pred, noise, reduction="mean")
 
     def validation_step(self, batch: Tensor, batch_idx: int) -> Tensor:
         with torch.no_grad():
             noise_pred, noise = self(batch)
 
-        return F.mse_loss(noise_pred, noise, reduce="mean")
+        return F.mse_loss(noise_pred, noise, reduction="mean")
