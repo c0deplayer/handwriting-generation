@@ -1,8 +1,9 @@
 import warnings
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 
+import PIL
 import numpy as np
 import torch
 from PIL import Image, ImageOps
@@ -143,7 +144,9 @@ def __combine_strokes(strokes: np.ndarray, n: int) -> np.ndarray:
     return strokes
 
 
-def get_image(path: Path, *, width: int, height: int, latent: bool = False) -> Image:
+def get_image(
+    path: Path, *, width: int, height: int, latent: bool = False
+) -> Union[Image, None]:
     """
     _summary_
 
@@ -156,7 +159,7 @@ def get_image(path: Path, *, width: int, height: int, latent: bool = False) -> I
 
     Returns
     -------
-    np.ndarray
+    Image | None
         _description_
 
     Raises
@@ -167,8 +170,10 @@ def get_image(path: Path, *, width: int, height: int, latent: bool = False) -> I
 
     if not path.is_file():
         raise FileNotFoundError(f"The image was not found: {path}")
-
-    img = Image.open(path)
+    try:
+        img = Image.open(path)
+    except PIL.UnidentifiedImageError:
+        return None
 
     if not latent:
         if img.mode != "L":
@@ -258,7 +263,9 @@ def pad_stroke(
     return padded_strokes
 
 
-def fill_text(text: list[int], *, max_len: int, pad_value: int = 0) -> np.ndarray:
+def fill_text(
+    text: list[int], *, max_len: int, pad_value: int = 0
+) -> np.ndarray | None:
     """
     _summary_
 
@@ -278,6 +285,8 @@ def fill_text(text: list[int], *, max_len: int, pad_value: int = 0) -> np.ndarra
     """
 
     text_len = len(text)
+    if text_len > max_len:
+        return None
 
     padded_text = np.full((max_len - text_len,), pad_value)
     # noinspection PyTypeChecker

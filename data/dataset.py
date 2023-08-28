@@ -359,12 +359,18 @@ class IAMDataset(Dataset):
                 height=self.img_height,
                 latent=True,
             )
+            if image is None:
+                continue
+
             image = utils.pad_image(image, width=self.img_width, height=self.img_height)
             if self.transforms is not None:
                 image = self.transforms(image)
 
             label = self.tokenizer.encode(label)
             label = utils.fill_text(label, max_len=self.max_text_len)
+
+            if label is None:
+                continue
 
             dataset.append({"writer": writer_id, "image": image, "label": label})
 
