@@ -2,6 +2,8 @@ import torch
 from einops import rearrange
 from torch import nn, Tensor
 
+from .activation import GeGLU
+
 
 class GroupNorm32(nn.GroupNorm):
     def forward(self, x: Tensor) -> Tensor:
@@ -18,3 +20,28 @@ def noise_image(
     noise = torch.randn_like(x)
 
     return sqrt_alpha_bar * x + sqrt_one_minus_alpha_bar * noise, noise
+
+
+class FeedForwardNetwork(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        d_out: int = None,
+        *,
+        d_mult: int = 4,
+        dropout: float = 0.0,
+    ) -> None:
+        super().__init__()
+
+        if d_out is None:
+            d_out = d_model
+
+        self.ff_net = nn.Sequential(
+            nn.Linear(d_model, d_model * d_mult),
+            GeGLU(d_model, d_model * d_mult),
+            nn.Dropout(dropout),
+            nn.Linear(d_model * d_mult, d_out),
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        return self.ff_net(x)

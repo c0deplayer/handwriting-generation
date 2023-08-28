@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 import lightning.pytorch as pl
 import torch
@@ -7,33 +7,7 @@ from diffusers import AutoencoderKL
 from torch import Tensor, nn
 
 from . import utils
-from .activation import GeGLU
 from .unet import UNetModel
-
-
-class FeedForwardNetwork(nn.Module):
-    def __init__(
-        self,
-        d_model: int,
-        d_out: int = None,
-        *,
-        d_mult: int = 4,
-        dropout: float = 0.0,
-    ) -> None:
-        super().__init__()
-
-        if d_out is None:
-            d_out = d_model
-
-        self.ff_net = nn.Sequential(
-            nn.Linear(d_model, d_model * d_mult),
-            GeGLU(d_model, d_model * d_mult),
-            nn.Dropout(dropout),
-            nn.Linear(d_model * d_mult, d_out),
-        )
-
-    def forward(self, x: Tensor) -> Tensor:
-        return self.ff_net(x)
 
 
 class DiffusionWrapper(nn.Module):

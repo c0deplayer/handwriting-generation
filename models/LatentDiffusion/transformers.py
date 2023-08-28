@@ -3,7 +3,7 @@ from einops import rearrange
 from torch import Tensor
 
 from .attention import CrossAttention
-from .model import FeedForwardNetwork
+from .utils import FeedForwardNetwork
 
 
 class BasicTransformerBlock(nn.Module):
