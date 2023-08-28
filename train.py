@@ -1,4 +1,5 @@
 import os
+import sys
 from argparse import ArgumentParser
 
 import lightning.pytorch as pl
@@ -70,6 +71,9 @@ def cli_main():
 
 if __name__ == "__main__":
     args = cli_main()
+
+    if sys.version_info < (3, 10):
+        raise SystemExit("Only Python 3.10 and above is supported")
 
     config_file = f"configs/{args.config}/{args.config_file}"
 
