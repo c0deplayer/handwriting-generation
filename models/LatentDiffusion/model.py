@@ -1,9 +1,10 @@
-from typing import Any
+from typing import Any, Optional
 
 import lightning.pytorch as pl
 import torch
+import torch.nn.functional as F
 from diffusers import AutoencoderKL
-from torch import nn, Tensor
+from torch import Tensor, nn
 
 from . import utils
 from .activation import GeGLU
@@ -90,7 +91,7 @@ class LatentDiffusion(pl.LightningModule):
         batch: tuple[Tensor, ...],
         *,
         interpolation: bool = False,
-    ) -> Tensor:
+    ) -> tuple[Tensor, Tensor]:
         writers, images, text = batch
 
         images = (
@@ -101,10 +102,24 @@ class LatentDiffusion(pl.LightningModule):
         time_step = torch.randint(low=1, high=self.n_steps, size=(images.size(0),))
         x_t, noise = utils.noise_image(images, time_step, self.alpha_bar)
 
-        return self.model(
-            x_t,
-            time_step,
-            context=text,
-            writer_id=writers,
-            interpolation=interpolation,
+        return (
+            self.model(
+                x_t,
+                time_step,
+                context=text,
+                writer_id=writers,
+                interpolation=interpolation,
+            ),
+            noise,
         )
+
+    def training_step(self, batch: Tensor, batch_idx: int) -> Tensor:
+        noise_pred, noise = self(batch)
+
+        return F.mse_loss(noise_pred, noise, reduce="mean")
+
+    def validation_step(self, batch: Tensor, batch_idx: int) -> Tensor:
+        with torch.no_grad():
+            noise_pred, noise = self(batch)
+
+        return F.mse_loss(noise_pred, noise, reduce="mean")
