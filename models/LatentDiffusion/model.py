@@ -5,6 +5,7 @@ import torch
 import torch.nn.functional as F
 from diffusers import AutoencoderKL
 from torch import Tensor, nn
+from torch.optim import Optimizer
 
 from . import utils
 from .unet import UNetModel
@@ -97,3 +98,6 @@ class LatentDiffusionModel(pl.LightningModule):
             noise_pred, noise = self(batch)
 
         return F.mse_loss(noise_pred, noise, reduction="mean")
+
+    def configure_optimizers(self) -> Optimizer:
+        return torch.optim.AdamW(self.parameters(), lr=1e-4)
