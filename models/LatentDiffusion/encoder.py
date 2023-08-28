@@ -35,7 +35,7 @@ class PositionalEncoder(nn.Module):
         )
 
     def forward(self):
-        return self.positional_encodings().detach().requires_grad_(False)
+        return self.positional_encodings.detach().requires_grad_(False)
 
     @staticmethod
     def get_positional_encoding(d_model: int, d_emb: int) -> Tensor:
