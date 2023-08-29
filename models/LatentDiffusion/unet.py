@@ -35,8 +35,9 @@ class UNetModel(nn.Module):
         vocab_size: int,
         attention_levels: tuple[int],
         channel_multipliers: tuple[int],
-        d_cond: int,  # 768
         heads: int,
+        d_cond: int = 768,
+        *,
         dropout: float = 0.0,
         n_style_classes: int = None,
         tf_layers: int = 1,
@@ -272,7 +273,7 @@ class UNetModel(nn.Module):
         t_emb = self.time_step_embedding(time_steps)
         t_emb = self.time_embed(t_emb)
 
-        if self.n_style_classes is not None and writer_id.size() != x.size(1):
+        if self.n_style_classes is not None and writer_id.size(0) != x.size(0):
             raise RuntimeError(
                 f"Expected size to be {x.size(1)}, got {writer_id.size()}"
             )
