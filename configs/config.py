@@ -13,6 +13,7 @@ class ConfigLatentDiffusion(YAMLWizard, key_transform="SNAKE"):
     max_text_len: int
     max_files: int
     device: str
+    train_size: float
 
     autoencoder_path: str
     channels: int

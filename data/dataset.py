@@ -59,6 +59,11 @@ class DataModule(pl.LightningDataModule):
         elif isinstance(config, ConfigLatentDiffusion):
             self.img_height = config.img_height
             self.img_width = config.img_width
+            # TODO: temporary solution, find better one
+            if self.max_files:
+                self.train_size = int(config.max_files * config.train_size)
+                self.val_size = config.max_files - self.train_size
+
         elif isinstance(config, ConfigRNN):
             self.img_height = 90
             self.img_width = 1400
@@ -87,7 +92,7 @@ class DataModule(pl.LightningDataModule):
                     img_height=self.img_height,
                     img_width=self.img_width,
                     max_text_len=self.max_text_len,
-                    max_files=self.max_files,
+                    max_files=self.train_size,
                     dataset_type="train",
                     transforms=transforms,
                 )
@@ -95,7 +100,7 @@ class DataModule(pl.LightningDataModule):
                     config=self.__config,
                     img_height=self.img_height,
                     img_width=self.img_width,
-                    max_files=self.max_files,
+                    max_files=self.val_size,
                     max_text_len=self.max_text_len,
                     dataset_type="val",
                     transforms=transforms,
