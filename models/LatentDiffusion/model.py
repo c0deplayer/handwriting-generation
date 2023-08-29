@@ -93,13 +93,19 @@ class LatentDiffusionModel(pl.LightningModule):
     def training_step(self, batch: Tensor, batch_idx: int) -> Tensor:
         noise_pred, noise = self(batch)
 
-        return F.mse_loss(noise_pred, noise, reduction="mean")
+        loss = F.mse_loss(noise_pred, noise, reduction="mean")
+        self.log("loss", loss, on_step=True, on_epoch=True, prog_bar=True)
+
+        return loss
 
     def validation_step(self, batch: Tensor, batch_idx: int) -> Tensor:
         with torch.no_grad():
             noise_pred, noise = self(batch)
 
-        return F.mse_loss(noise_pred, noise, reduction="mean")
+        loss = F.mse_loss(noise_pred, noise, reduction="mean")
+        self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+
+        return loss
 
     def configure_optimizers(self) -> Optimizer:
         return torch.optim.AdamW(self.parameters(), lr=1e-4)
