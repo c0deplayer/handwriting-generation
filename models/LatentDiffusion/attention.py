@@ -71,7 +71,7 @@ class CrossAttention(nn.Module):
         ]
 
         # noinspection PyTypeChecker
-        attention: Tensor = einsum("b i d, b j d -> b i j", q, k) * self.scale
+        attention: Tensor = einsum(q, k, "b i d, b j d -> b i j") * self.scale
 
         if mask is not None:
             # ! Test this code
@@ -83,7 +83,7 @@ class CrossAttention(nn.Module):
         attention = F.softmax(attention, dim=-1)
 
         # noinspection PyTypeChecker
-        out = einsum("b i j, b j d -> b i d", attention, v)
+        out = einsum(attention, v, "b i j, b j d -> b i d")
         out = rearrange(out, "(b h) n d -> b n (h d)", h=self.n_heads)
 
         return self.to_out(out)
