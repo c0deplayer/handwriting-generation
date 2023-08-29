@@ -35,7 +35,11 @@ class BasicTransformerBlock(nn.Module):
         super().__init__()
 
         self.attention_0 = CrossAttention(
-            d_model, n_heads=n_heads, d_head=d_head, dropout=dropout
+            d_model,
+            n_heads=n_heads,
+            d_head=d_head,
+            dropout=dropout,
+            use_flash_attention=False,
         )
         self.norm_0 = nn.LayerNorm(d_model)
 
@@ -45,6 +49,7 @@ class BasicTransformerBlock(nn.Module):
             n_heads=n_heads,
             d_head=d_head,
             dropout=dropout,
+            use_flash_attention=False,
         )
         self.norm_1 = nn.LayerNorm(d_model)
 

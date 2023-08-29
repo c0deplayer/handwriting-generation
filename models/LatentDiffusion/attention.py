@@ -1,11 +1,10 @@
+import torch
 import torch.nn.functional as F
-from einops import rearrange, einsum
-from torch import nn, Tensor
+from einops import einsum, rearrange
+from torch import Tensor, nn
 
 
 class CrossAttention(nn.Module):
-    use_flash_attention: bool = False
-
     def __init__(
         self,
         d_model: int,
@@ -13,9 +12,12 @@ class CrossAttention(nn.Module):
         n_heads: int = 8,
         d_head: int = 64,
         dropout: float = 0.0,
+        *,
+        use_flash_attention: bool = False,
     ) -> None:
         super().__init__()
 
+        self.use_flash_attention = use_flash_attention
         self.n_heads = n_heads
         self.d_head = d_head
         self.scale = d_head**-0.5
@@ -31,11 +33,11 @@ class CrossAttention(nn.Module):
         )
 
         try:
-            from flash_attn.flash_attention import FlashAttention
+            from flash_attn.modules.mha import FlashSelfAttention
 
-            self.flash = FlashAttention()
-            self.flash.softmax_scale = self.scale
-
+            self.flash = FlashSelfAttention(
+                softmax_scale=self.scale, attention_dropout=dropout
+            )
         except ImportError:
             self.flash = None
 
@@ -51,17 +53,41 @@ class CrossAttention(nn.Module):
         v = self.to_q(context)
 
         if (
-            CrossAttention.use_flash_attention
+            self.use_flash_attention
             and self.flash is not None
             and not has_context
+            and mask is None
             and self.d_head <= 128
         ):
             return self.flash_attention(q, k, v)
         else:
             return self.normal_attention(q, k, v, mask=mask)
 
-    def flash_attention(self, q: Tensor, k: Tensor, v: Tensor):
-        raise NotImplementedError
+    def flash_attention(self, q: Tensor, k: Tensor, v: Tensor) -> Tensor:
+        batch_size, seq_len, _ = q.size()
+
+        qkv = torch.stack((q, k, v), dim=2)
+        qkv = qkv.view(batch_size, seq_len, 3, self.n_heads, self.d_head)
+
+        if self.d_head <= 32:
+            pad = 32 - self.d_head
+        elif self.d_head <= 64:
+            pad = 64 - self.d_head
+        elif self.d_head <= 128:
+            pad = 128 - self.d_head
+        else:
+            raise ValueError(f"Head size {self.d_head} too large for Flash Attention")
+
+        if pad:
+            qkv = torch.cat(
+                (qkv, qkv.new_zeros(batch_size, seq_len, 3, self.n_heads, pad)), dim=-1
+            )
+
+        out = self.flash(qkv)
+        out = out[:, :, :, : self.d_head]
+        out = out.reshape(batch_size, seq_len, self.n_heads * self.d_head)
+
+        return self.to_out(out)
 
     def normal_attention(
         self, q: Tensor, k: Tensor, v: Tensor, *, mask: Tensor = None
