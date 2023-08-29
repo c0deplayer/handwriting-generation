@@ -74,7 +74,9 @@ class LatentDiffusionModel(pl.LightningModule):
             * 0.18215
         )
 
-        time_step = torch.randint(low=1, high=self.n_steps, size=(images.size(0),))
+        time_step = torch.randint(
+            low=1, high=self.n_steps, size=(images.size(0),), device=images.device
+        )
         x_t, noise = utils.noise_image(images, time_step, self.alpha_bar)
 
         return (
