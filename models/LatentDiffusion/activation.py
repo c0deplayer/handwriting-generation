@@ -22,7 +22,7 @@ class GeGLU(nn.Module):
         self.proj = nn.Linear(d_in, d_out * 2)
 
     def forward(self, x: Tensor) -> Tensor:
-        if x.shape[-1] % 2 == 0:
+        if x.shape[-1] % 2 != 0:
             raise RuntimeError("The last dimension is not an even number")
 
         return self.geglu(x)
