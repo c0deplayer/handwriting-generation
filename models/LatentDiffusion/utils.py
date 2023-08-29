@@ -37,7 +37,6 @@ class FeedForwardNetwork(nn.Module):
             d_out = d_model
 
         self.ff_net = nn.Sequential(
-            nn.Linear(d_model, d_model * d_mult),
             GeGLU(d_model, d_model * d_mult),
             nn.Dropout(dropout),
             nn.Linear(d_model * d_mult, d_out),
