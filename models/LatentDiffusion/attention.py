@@ -74,11 +74,8 @@ class CrossAttention(nn.Module):
         attention: Tensor = einsum(q, k, "b i d, b j d -> b i j") * self.scale
 
         if mask is not None:
-            # ! Test this code
             mask = rearrange(mask, "b j -> b 1 1 j")
-            attention.masked_fill_(mask == 0, float("-inf"))
-            # max_neg_value = -torch.finfo(attention.dtype).max
-            # attention.masked_fill_(~mask, max_neg_value)
+            attention.masked_fill_(~mask, -10000.0)
 
         attention = F.softmax(attention, dim=-1)
 
