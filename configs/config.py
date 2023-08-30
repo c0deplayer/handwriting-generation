@@ -1,11 +1,28 @@
 import string
 from dataclasses import dataclass, field
+from typing import Any
 
 from dataclass_wizard import YAMLWizard
 
 
 @dataclass
-class ConfigLatentDiffusion(YAMLWizard, key_transform="SNAKE"):
+class AbstractConfig(YAMLWizard, key_transform="SNAKE"):
+    vocab: str = field(
+        default=f"_{string.ascii_letters}{string.digits}.?!,'\"-", kw_only=True
+    )
+
+    def get(self, key: str, default_value: Any = None) -> Any:
+        try:
+            return getattr(self, key)
+        except AttributeError:
+            return default_value
+
+    def __post_init__(self):
+        self.vocab_size: int = len(self.vocab) + 2
+
+
+@dataclass
+class ConfigLatentDiffusion(AbstractConfig):
     batch_size: int
     max_epochs: int
     img_height: int
@@ -31,14 +48,9 @@ class ConfigLatentDiffusion(YAMLWizard, key_transform="SNAKE"):
     data_path: str
     checkpoint_path: str
 
-    vocab: str = field(default=f"_{string.ascii_letters}{string.digits}.?!,'\"-")
-
-    def __post_init__(self):
-        self.vocab_size: int = len(self.vocab) + 2
-
 
 @dataclass
-class ConfigDiffusion(YAMLWizard, key_transform="SNAKE"):
+class ConfigDiffusion(AbstractConfig):
     batch_size: int
     max_epochs: int
     img_height: int
@@ -59,8 +71,6 @@ class ConfigDiffusion(YAMLWizard, key_transform="SNAKE"):
     dataset_txt: str
     checkpoint_path: str
 
-    vocab: str = field(default=f"_{string.ascii_letters}{string.digits}.?!,'\"-")
-
     blacklist: tuple[str, ...] = field(
         default=(
             "z00-001",
@@ -74,12 +84,9 @@ class ConfigDiffusion(YAMLWizard, key_transform="SNAKE"):
         )
     )
 
-    def __post_init__(self):
-        self.vocab_size: int = len(self.vocab) + 2
-
 
 @dataclass
-class ConfigRNN(YAMLWizard, key_transform="SNAKE"):
+class ConfigRNN(AbstractConfig):
     batch_size: int
     max_epochs: int
     max_text_len: int
@@ -100,8 +107,6 @@ class ConfigRNN(YAMLWizard, key_transform="SNAKE"):
     dataset_txt: str
     checkpoint_path: str
 
-    vocab: str = field(default=f"_{string.ascii_letters}{string.digits}.?!,'\"-")
-
     blacklist: tuple[str, ...] = field(
         default=(
             "z00-001",
@@ -114,6 +119,3 @@ class ConfigRNN(YAMLWizard, key_transform="SNAKE"):
             "z01-010c",
         )
     )
-
-    def __post_init__(self):
-        self.vocab_size: int = len(self.vocab) + 2

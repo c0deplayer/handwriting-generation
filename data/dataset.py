@@ -38,6 +38,11 @@ class DataModule(pl.LightningDataModule):
 
         super().__init__()
 
+        if not isinstance(config, (ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion)):
+            raise TypeError(
+                f"Expected config to be ConfigDiffusion, ConfigRNN or ConfigLatentDiffusion, got {type(config)}"
+            )
+
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
@@ -47,34 +52,11 @@ class DataModule(pl.LightningDataModule):
         self.batch_size = config.batch_size
         self.max_text_len = config.max_text_len
         self.max_files = config.max_files
-
-        # TODO: temporary solution, find better one
-        if isinstance(config, ConfigDiffusion):
-            self.img_height = config.img_height
-            self.img_width = config.img_width
-            self.train_size = config.train_size
-            self.val_size = 1.0 - self.train_size
-            self.max_seq_len = config.max_seq_len
-        elif isinstance(config, ConfigLatentDiffusion):
-            self.img_height = config.img_height
-            self.img_width = config.img_width
-            # TODO: temporary solution, find better one
-            if self.max_files:
-                self.train_size = int(config.max_files * config.train_size)
-                self.val_size = config.max_files - self.train_size
-            else:
-                self.train_size, self.val_size = 0, 0
-
-        elif isinstance(config, ConfigRNN):
-            self.img_height = 90
-            self.img_width = 1400
-            self.train_size = config.train_size
-            self.val_size = 1.0 - self.train_size
-            self.max_seq_len = config.max_seq_len
-        else:
-            raise RuntimeError(
-                f"Expected ConfigDiffusion | ConfigRNN | ConfigLatentDiffusion, got {str(config)}"
-            )
+        self.img_height = config.get("img_height", 90)
+        self.img_width = config.get("img_width", 1400)
+        self.max_seq_len = config.get("max_seq_len", 0)
+        self.train_size = config.get("train_size", 0.85)
+        self.val_size = 1.0 - self.train_size
 
     # noinspection PyCallingNonCallable
     def setup(self, stage: str) -> None:
@@ -87,7 +69,7 @@ class DataModule(pl.LightningDataModule):
                     img_height=self.img_height,
                     img_width=self.img_width,
                     max_text_len=self.max_text_len,
-                    max_files=self.train_size,
+                    max_files=self.train_size * self.max_files,
                     dataset_type="train",
                 )
                 self.val_dataset = self.dataset(
@@ -95,7 +77,7 @@ class DataModule(pl.LightningDataModule):
                     img_height=self.img_height,
                     img_width=self.img_width,
                     max_files=self.val_size,
-                    max_text_len=self.max_text_len,
+                    max_text_len=self.max_text_len * self.max_files,
                     dataset_type="val",
                 )
             else:
