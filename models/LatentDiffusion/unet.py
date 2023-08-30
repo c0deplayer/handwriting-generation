@@ -45,7 +45,7 @@ class UNetModel(nn.Module):
     ):
         super().__init__()
         if d_cond is None:
-            raise RuntimeError(
+            raise TypeError(
                 "Expected dimension of cross_attention conditioning to be int, got None"
             )
 
@@ -285,9 +285,7 @@ class UNetModel(nn.Module):
 
             t_emb = self.interpolation(writer_id, t_emb, mix_rate=mix_rate)
         elif not isinstance(writer_id, Tensor):
-            raise RuntimeError(
-                f"Expected writer_id to be Tensor, got {type(writer_id)}"
-            )
+            raise TypeError(f"Expected writer_id to be Tensor, got {type(writer_id)}")
         else:
             t_emb = t_emb + self.label_emb(writer_id)
 
@@ -314,11 +312,11 @@ class UNetModel(nn.Module):
         mix_rate: float = 1.0,
     ) -> Tensor:
         if not isinstance(writer_id, tuple):
-            raise RuntimeError(
+            raise TypeError(
                 f"Expected writer_id to be tuple for interpolation, got {type(writer_id)}"
             )
         if writer_id[0] == writer_id[1]:
-            raise RuntimeError("Writer IDs must be unique")
+            raise ValueError("Writer IDs must be unique")
 
         s1, s2 = writer_id
         y1 = torch.tensor([s1], dtype=torch.long, device=t_emb.device)

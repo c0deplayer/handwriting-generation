@@ -186,7 +186,7 @@ class LatentDiffusionModel(pl.LightningModule):
         if isinstance(writer_id, int):
             writer_id = torch.tensor(writer_id, dtype=torch.int32)
         elif not isinstance(writer_id, tuple):
-            raise RuntimeError(
+            raise TypeError(
                 f"Expected writer_id to be int or tuple, got {type(writer_id)}"
             )
 
