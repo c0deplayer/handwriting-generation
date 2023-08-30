@@ -63,6 +63,8 @@ class DataModule(pl.LightningDataModule):
             if self.max_files:
                 self.train_size = int(config.max_files * config.train_size)
                 self.val_size = config.max_files - self.train_size
+            else:
+                self.train_size, self.val_size = 0, 0
 
         elif isinstance(config, ConfigRNN):
             self.img_height = 90
