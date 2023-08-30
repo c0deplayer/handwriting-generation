@@ -10,7 +10,6 @@ from einops import rearrange
 from rich.progress import track
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset, random_split
-from torchvision.transforms import Compose
 
 from configs.config import ConfigDiffusion, ConfigLatentDiffusion, ConfigRNN
 from models.Diffusion.text_style import StyleExtractor
@@ -80,15 +79,9 @@ class DataModule(pl.LightningDataModule):
     # noinspection PyCallingNonCallable
     def setup(self, stage: str) -> None:
         if stage == "fit":
+            # TODO: Avoid creating two separate dataset like that or pass writers dict to val_dataset to avoid
+            # TODO: mixing writer ids (writer_id_train_0 != writer_id_val_0)
             if isinstance(self.__config, ConfigLatentDiffusion):
-                transforms = torchvision.transforms.Compose(
-                    [
-                        torchvision.transforms.ToTensor(),
-                        torchvision.transforms.Normalize(
-                            (0.5, 0.5, 0.5), (0.5, 0.5, 0.5)
-                        ),
-                    ]
-                )
                 self.train_dataset = self.dataset(
                     config=self.__config,
                     img_height=self.img_height,
@@ -96,7 +89,6 @@ class DataModule(pl.LightningDataModule):
                     max_text_len=self.max_text_len,
                     max_files=self.train_size,
                     dataset_type="train",
-                    transforms=transforms,
                 )
                 self.val_dataset = self.dataset(
                     config=self.__config,
@@ -105,7 +97,6 @@ class DataModule(pl.LightningDataModule):
                     max_files=self.val_size,
                     max_text_len=self.max_text_len,
                     dataset_type="val",
-                    transforms=transforms,
                 )
             else:
                 iam_full = self.dataset(
@@ -194,9 +185,6 @@ class IAMonDataset(Dataset):
         self._std = utils.compute_std(self.dataset)
 
     def __load_data(self) -> None:
-        transform = torchvision.transforms.Compose(
-            [torchvision.transforms.PILToTensor()]
-        )
         dataset = []
         raw_data_path = Path(self.config.data_path)
         ascii_path = raw_data_path / "ascii"
@@ -242,7 +230,9 @@ class IAMonDataset(Dataset):
                 image = utils.pad_image(
                     image, width=self.img_width, height=self.img_height
                 )
-                writer_image = transform(image).to(torch.float32)
+                writer_image = torchvision.transforms.PILToTensor()(image).to(
+                    torch.float32
+                )
                 if self.diffusion:
                     writer_image = rearrange(writer_image, "1 h w -> 1 1 h w")
 
@@ -327,13 +317,17 @@ class IAMDataset(Dataset):
         max_text_len: int,
         max_files: int,
         dataset_type: Literal["train", "val", "test"],
-        transforms: Compose,
         **kwargs,
     ) -> None:
         self.__config = config
         self.max_text_len = max_text_len
         self.max_files = max_files
-        self.transforms = transforms
+        self.transforms = torchvision.transforms.Compose(
+            [
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ]
+        )
         self.img_height = img_height
         self.img_width = img_width
         self.dataset_type = dataset_type
