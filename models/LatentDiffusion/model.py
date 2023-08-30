@@ -30,6 +30,7 @@ class DiffusionWrapper(nn.Module):
         context: Tensor = None,
         writer_id: Tensor | tuple[int, int] = None,
         interpolation: bool = False,
+        mix_rate: float = None,
     ) -> Tensor:
         return self.diffusion_model(
             x,
@@ -37,6 +38,7 @@ class DiffusionWrapper(nn.Module):
             context=context,
             writer_id=writer_id,
             interpolation=interpolation,
+            mix_rate=mix_rate,
         )
 
     def generate_image_noise(
@@ -67,6 +69,7 @@ class DiffusionWrapper(nn.Module):
                     context=word,
                     writer_id=writer_id,
                     interpolation=interpolation,
+                    mix_rate=mix_rate,
                 )
                 if cfg_scale > 0:
                     uncond_predicted_noise = self(
@@ -75,6 +78,7 @@ class DiffusionWrapper(nn.Module):
                         context=word,
                         writer_id=writer_id,
                         interpolation=interpolation,
+                        mix_rate=mix_rate,
                     )
                     predicted_noise = torch.lerp(
                         uncond_predicted_noise, predicted_noise, cfg_scale
@@ -128,10 +132,8 @@ class LatentDiffusionModel(pl.LightningModule):
     ) -> tuple[Tensor, Tensor]:
         writers, images, text = batch
 
-        images = (
-            self.autoencoder.encode(images.to(torch.float32)).latent_dist.sample()
-            * 0.18215
-        )
+        images = self.autoencoder.encode(images.to(torch.float32)).latent_dist.sample()
+        images *= 0.18215
 
         time_step = torch.randint(
             low=1, high=self.n_steps, size=(images.size(0),), device=images.device

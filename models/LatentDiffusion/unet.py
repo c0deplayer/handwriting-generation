@@ -263,6 +263,7 @@ class UNetModel(nn.Module):
         context: Tensor = None,
         writer_id: Tensor | tuple[int, int] = None,
         interpolation: bool = False,
+        mix_rate: float = None,
     ) -> Tensor:
         if writer_id is None or self.n_style_classes is None:
             raise RuntimeError(
@@ -279,7 +280,10 @@ class UNetModel(nn.Module):
             )
 
         if interpolation:
-            t_emb = self.interpolation(writer_id, t_emb)
+            if mix_rate is None:
+                raise ValueError(f"Invalid mix_rate value: {mix_rate}")
+
+            t_emb = self.interpolation(writer_id, t_emb, mix_rate=mix_rate)
         elif not isinstance(writer_id, Tensor):
             raise RuntimeError(
                 f"Expected writer_id to be Tensor, got {type(writer_id)}"
