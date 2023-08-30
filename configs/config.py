@@ -6,7 +6,17 @@ from dataclass_wizard import YAMLWizard
 
 
 @dataclass
-class AbstractConfig(YAMLWizard, key_transform="SNAKE"):
+class BaseConfig(YAMLWizard, key_transform="SNAKE"):
+    device: str
+    batch_size: int
+    max_epochs: int
+    max_files: int
+    max_text_len: int
+    train_size: float
+
+    data_path: str
+    checkpoint_path: str
+
     vocab: str = field(
         default=f"_{string.ascii_letters}{string.digits}.?!,'\"-", kw_only=True
     )
@@ -22,15 +32,9 @@ class AbstractConfig(YAMLWizard, key_transform="SNAKE"):
 
 
 @dataclass
-class ConfigLatentDiffusion(AbstractConfig):
-    batch_size: int
-    max_epochs: int
+class ConfigLatentDiffusion(BaseConfig):
     img_height: int
     img_width: int
-    max_text_len: int
-    max_files: int
-    device: str
-    train_size: float
 
     autoencoder_path: str
     channels: int
@@ -45,21 +49,12 @@ class ConfigLatentDiffusion(AbstractConfig):
     channel_multipliers: tuple
     drop_rate: float
 
-    data_path: str
-    checkpoint_path: str
-
 
 @dataclass
-class ConfigDiffusion(AbstractConfig):
-    batch_size: int
-    max_epochs: int
+class ConfigDiffusion(BaseConfig):
     img_height: int
     img_width: int
-    max_text_len: int
     max_seq_len: int
-    max_files: int
-    train_size: float
-    device: str
 
     num_layers: int
     channels: int
@@ -67,9 +62,7 @@ class ConfigDiffusion(AbstractConfig):
     clip_grad: float
     clip_algorithm: str
 
-    data_path: str
     dataset_txt: str
-    checkpoint_path: str
 
     blacklist: tuple[str, ...] = field(
         default=(
@@ -81,19 +74,13 @@ class ConfigDiffusion(AbstractConfig):
             "z01-010",
             "z01-010b",
             "z01-010c",
-        )
+        ),
     )
 
 
 @dataclass
-class ConfigRNN(AbstractConfig):
-    batch_size: int
-    max_epochs: int
-    max_text_len: int
+class ConfigRNN(BaseConfig):
     max_seq_len: int
-    max_files: int
-    train_size: float
-    device: str
 
     input_size: int
     hidden_size: int
@@ -103,9 +90,7 @@ class ConfigRNN(AbstractConfig):
     mdn_clip: float
     bias: float
 
-    data_path: str
     dataset_txt: str
-    checkpoint_path: str
 
     blacklist: tuple[str, ...] = field(
         default=(
@@ -117,5 +102,5 @@ class ConfigRNN(AbstractConfig):
             "z01-010",
             "z01-010b",
             "z01-010c",
-        )
+        ),
     )
