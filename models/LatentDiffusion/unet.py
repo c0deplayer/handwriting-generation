@@ -279,7 +279,7 @@ class UNetModel(nn.Module):
             )
 
         if interpolation:
-            t_emb = self.interpolation(writer_id, t_emb, device=x.device)
+            t_emb = self.interpolation(writer_id, t_emb)
         elif not isinstance(writer_id, Tensor):
             raise RuntimeError(
                 f"Expected writer_id to be Tensor, got {type(writer_id)}"
@@ -308,7 +308,6 @@ class UNetModel(nn.Module):
         t_emb: Tensor,
         *,
         mix_rate: float = 1.0,
-        device: torch.device,
     ) -> Tensor:
         if not isinstance(writer_id, tuple):
             raise RuntimeError(
@@ -318,13 +317,13 @@ class UNetModel(nn.Module):
             raise RuntimeError("Writer IDs must be unique")
 
         s1, s2 = writer_id
-        y1 = torch.LongTensor([s1], device=device)
-        y2 = torch.LongTensor([s2], device=device)
+        y1 = torch.tensor([s1], dtype=torch.long, device=t_emb.device)
+        y2 = torch.tensor([s2], dtype=torch.long, device=t_emb.device)
 
-        y1 = self.label_emb(y1).to(device=device)
-        y2 = self.label_emb(y2).to(device=device)
+        y1 = self.label_emb(y1).to(device=t_emb.device)
+        y2 = self.label_emb(y2).to(device=t_emb.device)
 
         y = (1 - mix_rate) * y1 - mix_rate * y2
-        y = y.to(device=device)
+        y = y.to(device=t_emb.device)
 
         return t_emb + self.label_emb(y)
