@@ -1,21 +1,26 @@
+from pathlib import Path
 from typing import Any
 
 import lightning.pytorch as pl
 import torch
 import torch.nn.functional as F
 from diffusers import AutoencoderKL
+from einops import rearrange
+from rich.progress import track
 from torch import Tensor, nn
 from torch.optim import Optimizer
 
+from data.tokenizer import Tokenizer
 from . import utils
 from .unet import UNetModel
 
 
 class DiffusionWrapper(nn.Module):
-    def __init__(self, kwargs_unet: dict[str, Any]) -> None:
+    def __init__(self, kwargs_unet: dict[str, Any], img_size: tuple[int, int]) -> None:
         super().__init__()
 
         self.diffusion_model = UNetModel(**kwargs_unet)
+        self.img_size = img_size
 
     def forward(
         self,
@@ -34,6 +39,60 @@ class DiffusionWrapper(nn.Module):
             interpolation=interpolation,
         )
 
+    def generate_image_noise(
+        self,
+        beta_alpha: tuple[Tensor, Tensor, Tensor],
+        n: int,
+        writer_id: Tensor | tuple[int, int],
+        word: Tensor,
+        n_steps: int,
+        *,
+        mix_rate: float = None,
+        interpolation: bool = False,
+        cfg_scale: int = 3,
+    ) -> Tensor:
+        beta, alpha, alpha_bar = beta_alpha
+        with torch.no_grad():
+            x = torch.randn(
+                (n, 4, self.img_size[0] // 8, self.img_size[1] // 8),
+                device=word.device,
+            )
+
+            p_bar = track(reversed(range(1, n_steps)))
+            for i in p_bar:
+                time_step = torch.ones(n, dtype=torch.long, device=word.device) * i
+                predicted_noise = self(
+                    x,
+                    time_step,
+                    context=word,
+                    writer_id=writer_id,
+                    interpolation=interpolation,
+                )
+                if cfg_scale > 0:
+                    uncond_predicted_noise = self(
+                        x,
+                        time_step,
+                        context=word,
+                        writer_id=writer_id,
+                        interpolation=interpolation,
+                    )
+                    predicted_noise = torch.lerp(
+                        uncond_predicted_noise, predicted_noise, cfg_scale
+                    )
+
+                alpha = rearrange(alpha[time_step], "v -> v 1 1 1")
+                alpha_bar = rearrange(alpha_bar[time_step], "v -> v 1 1 1")
+                beta = rearrange(beta[time_step], "v -> v 1 1 1")
+                noise = torch.randn_like(x) if i > 1 else torch.zeros_like(x)
+
+                scaling_factor = (1 - alpha) / (torch.sqrt(1 - alpha_bar))
+                x = (
+                    alpha**-0.5 * (x - scaling_factor * predicted_noise)
+                    + torch.sqrt(beta) * noise
+                )
+
+        return x
+
 
 class LatentDiffusionModel(pl.LightningModule):
     def __init__(
@@ -47,7 +106,7 @@ class LatentDiffusionModel(pl.LightningModule):
     ) -> None:
         super().__init__()
 
-        self.model = DiffusionWrapper(unet_params)
+        self.model = DiffusionWrapper(unet_params, img_size)
         self.autoencoder = AutoencoderKL.from_pretrained(
             autoencoder_path, subfolder="vae"
         ).requires_grad_(False)
@@ -109,3 +168,43 @@ class LatentDiffusionModel(pl.LightningModule):
 
     def configure_optimizers(self) -> Optimizer:
         return torch.optim.AdamW(self.parameters(), lr=1e-4)
+
+    def generate(
+        self,
+        text_line: str,
+        vocab: str,
+        writer_id: int | tuple[int, int],
+        *,
+        save_path: Path,
+        interpolation: bool = False,
+        mix_rate: float = None,
+    ) -> None:
+        words = text_line.split(" ")
+        tokenizer = Tokenizer(vocab)
+        if isinstance(writer_id, int):
+            writer_id = torch.tensor(writer_id, dtype=torch.int32)
+        elif not isinstance(writer_id, tuple):
+            raise RuntimeError(
+                f"Expected writer_id to be int or tuple, got {type(writer_id)}"
+            )
+
+        # TODO: Combine images into one image to create a line of text
+        for word in words:
+            word_enc = tokenizer.encode(word)
+            word_tensor = torch.tensor(word_enc, dtype=torch.long)
+
+            x = self.model.generate_image_noise(
+                beta_alpha=(self.beta, self.alpha, self.alpha_bar),
+                n=len(writer_id),
+                writer_id=writer_id,
+                word=word_tensor,
+                n_steps=self.n_steps,
+                interpolation=interpolation,
+                mix_rate=mix_rate,
+            )
+
+            x /= 0.18215
+            image = self.autoencoder.decode(x).sample()
+
+            image = (image / 2 + 0.5).clamp(0, 1).cpu()
+            utils.save_image(image, save_path)
