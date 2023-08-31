@@ -127,7 +127,7 @@ class RNNModel(pl.LightningModule):
             strokes_s = strokes[:, s : s + 1, :]
             strokes_window = torch.cat([strokes_s, window_s], dim=-1)
             out_s, hidden_1 = self.lstm_0(strokes_window, hidden_1)
-            phi, kappa, window_s = self.window(out_s, text, kappa, device=self.device)
+            phi, kappa, window_s = self.window(out_s, text, kappa)
 
             out_1.append(out_s)
             window.append(window_s)
