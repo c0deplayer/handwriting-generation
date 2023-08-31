@@ -1,11 +1,12 @@
 import warnings
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 
-import cv2
+import PIL
 import numpy as np
 import torch
+from PIL import Image, ImageOps
 from numpy.linalg import norm
 from rich.progress import track
 from torch import Tensor
@@ -143,7 +144,9 @@ def __combine_strokes(strokes: np.ndarray, n: int) -> np.ndarray:
     return strokes
 
 
-def get_image(path: Path, *, height: int) -> np.ndarray:
+def get_image(
+    path: Path, *, width: int, height: int, latent: bool = False
+) -> Union[Image, None]:
     """
     _summary_
 
@@ -156,7 +159,7 @@ def get_image(path: Path, *, height: int) -> np.ndarray:
 
     Returns
     -------
-    np.ndarray
+    Image | None
         _description_
 
     Raises
@@ -167,30 +170,33 @@ def get_image(path: Path, *, height: int) -> np.ndarray:
 
     if not path.is_file():
         raise FileNotFoundError(f"The image was not found: {path}")
+    try:
+        img = Image.open(path)
+    except PIL.UnidentifiedImageError:
+        return None
 
-    img = cv2.imread(filename=str(path), flags=cv2.IMREAD_GRAYSCALE)
-    img = __remove_whitespaces(img, threshold=127)
+    if not latent:
+        if img.mode != "L":
+            img = img.convert("L")
 
-    h, w = img.shape
-    img = cv2.resize(
-        src=img, dsize=(height * w // h, height), interpolation=cv2.INTER_CUBIC
-    )
+        # noinspection PyTypeChecker
+        img = __remove_whitespaces(np.array(img).astype("uint8"), threshold=127)
+        img = Image.fromarray(img, mode="L")
 
-    return img
+        w, h = img.size
+        img = img.resize(size=(w * height // h, height), resample=Image.BILINEAR)
 
+    else:
+        if img.mode != "RGB":
+            img = img.convert("RGB")
 
-# TODO: TMP Solution, try to make one universal function
-def get_image_iam(path: Path, *, width: int, height: int) -> np.ndarray:
-    if not path.is_file():
-        raise FileNotFoundError(f"The image was not found: {path}")
+        w, h = img.size
 
-    img = cv2.imread(filename=str(path))
-    h, w = img.shape
+        img = img.resize(size=(w * height // h, height), resample=Image.ANTIALIAS)
+        w, h = img.size
 
-    img = cv2.resize(src=img, dsize=(height * w // h, height))
-
-    if w > width:
-        img = cv2.resize(src=img, dsize=(width, height))
+        if w > width:
+            img = img.resize(size=(width, height), resample=Image.ANTIALIAS)
 
     return img
 
@@ -257,7 +263,9 @@ def pad_stroke(
     return padded_strokes
 
 
-def fill_text(text: list[int], *, max_len: int, pad_value: int = 0) -> np.ndarray:
+def fill_text(
+    text: list[int], *, max_len: int, pad_value: int = 0
+) -> np.ndarray | None:
     """
     _summary_
 
@@ -277,6 +285,8 @@ def fill_text(text: list[int], *, max_len: int, pad_value: int = 0) -> np.ndarra
     """
 
     text_len = len(text)
+    if text_len > max_len:
+        return None
 
     padded_text = np.full((max_len - text_len,), pad_value)
     # noinspection PyTypeChecker
@@ -285,9 +295,7 @@ def fill_text(text: list[int], *, max_len: int, pad_value: int = 0) -> np.ndarra
     return text
 
 
-def pad_image(
-    img: np.ndarray, *, width: int, height: int, fill_value: int = 255
-) -> np.ndarray:
+def pad_image(img: Image, *, width: int, height: int) -> Image:
     """
     _summary_
 
@@ -299,20 +307,16 @@ def pad_image(
         _description_
     height : int
         _description_
-    fill_value : int, optional
-        _description_, by default 255
 
     Returns
     -------
     np.ndarray
         _description_
     """
-
-    pad_len = width - img.shape[1]
-    padding = np.full((height, pad_len), fill_value, dtype=np.uint8)
-
-    img = np.concatenate((img, padding), axis=1)
-    return img
+    if img.size[0] > width:
+        return img
+    else:
+        return ImageOps.pad(image=img, size=(width, height), color="white")
 
 
 def compute_mean(dataset: list[dict[str, Any]]) -> Tensor:

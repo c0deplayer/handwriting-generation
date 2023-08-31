@@ -1,13 +1,10 @@
+import torch
 import torch.nn.functional as F
-from einops import rearrange, einsum
-from torch import nn, Tensor
-
-from .utils import GroupNorm32, scaled_dot_product_attention
+from einops import einsum, rearrange
+from torch import Tensor, nn
 
 
 class CrossAttention(nn.Module):
-    use_flash_attention: bool = False
-
     def __init__(
         self,
         d_model: int,
@@ -15,14 +12,19 @@ class CrossAttention(nn.Module):
         n_heads: int = 8,
         d_head: int = 64,
         dropout: float = 0.0,
+        *,
+        use_flash_attention: bool = False,
     ) -> None:
         super().__init__()
 
+        self.use_flash_attention = use_flash_attention
         self.n_heads = n_heads
         self.d_head = d_head
         self.scale = d_head**-0.5
 
-        d_cond = d_model if d_cond is None else d_cond
+        if d_cond is None:
+            d_cond = d_model
+
         self.to_q = nn.Linear(d_model, d_head * n_heads, bias=False)
         self.to_q = nn.Linear(d_cond, d_head * n_heads, bias=False)
         self.to_q = nn.Linear(d_cond, d_head * n_heads, bias=False)
@@ -31,11 +33,11 @@ class CrossAttention(nn.Module):
         )
 
         try:
-            from flash_attn.flash_attention import FlashAttention
+            from flash_attn.modules.mha import FlashSelfAttention
 
-            self.flash = FlashAttention()
-            self.flash.softmax_scale = self.scale
-
+            self.flash = FlashSelfAttention(
+                softmax_scale=self.scale, attention_dropout=dropout
+            )
         except ImportError:
             self.flash = None
 
@@ -51,17 +53,41 @@ class CrossAttention(nn.Module):
         v = self.to_q(context)
 
         if (
-            CrossAttention.use_flash_attention
+            self.use_flash_attention
             and self.flash is not None
             and not has_context
+            and mask is None
             and self.d_head <= 128
         ):
             return self.flash_attention(q, k, v)
         else:
             return self.normal_attention(q, k, v, mask=mask)
 
-    def flash_attention(self, q: Tensor, k: Tensor, v: Tensor):
-        raise NotImplementedError
+    def flash_attention(self, q: Tensor, k: Tensor, v: Tensor) -> Tensor:
+        batch_size, seq_len, _ = q.size()
+
+        qkv = torch.stack((q, k, v), dim=2)
+        qkv = qkv.view(batch_size, seq_len, 3, self.n_heads, self.d_head)
+
+        if self.d_head <= 32:
+            pad = 32 - self.d_head
+        elif self.d_head <= 64:
+            pad = 64 - self.d_head
+        elif self.d_head <= 128:
+            pad = 128 - self.d_head
+        else:
+            raise ValueError(f"Head size {self.d_head} too large for Flash Attention")
+
+        if pad:
+            qkv = torch.cat(
+                (qkv, qkv.new_zeros(batch_size, seq_len, 3, self.n_heads, pad)), dim=-1
+            )
+
+        out = self.flash(qkv)
+        out = out[:, :, :, : self.d_head]
+        out = out.reshape(batch_size, seq_len, self.n_heads * self.d_head)
+
+        return self.to_out(out)
 
     def normal_attention(
         self, q: Tensor, k: Tensor, v: Tensor, *, mask: Tensor = None
@@ -71,77 +97,19 @@ class CrossAttention(nn.Module):
         ]
 
         # noinspection PyTypeChecker
-        attention: Tensor = einsum("b i d, b j d -> b i j", q, k) * self.scale
+        attention: Tensor = einsum(q, k, "b i d, b j d -> b i j") * self.scale
 
         if mask is not None:
-            # ! Test this code
             mask = rearrange(mask, "b j -> b 1 1 j")
-            attention.masked_fill_(mask == 0, float("-inf"))
-            # max_neg_value = -torch.finfo(attention.dtype).max
-            # attention.masked_fill_(~mask, max_neg_value)
+            attention.masked_fill_(~mask, -10000.0)
 
         attention = F.softmax(attention, dim=-1)
 
         # noinspection PyTypeChecker
-        out = einsum("b i j, b j d -> b i d", attention, v)
+        out = einsum(attention, v, "b i j, b j d -> b i d")
         out = rearrange(out, "(b h) n d -> b n (h d)", h=self.n_heads)
 
         return self.to_out(out)
-
-
-class AttentionBlock(nn.Module):
-    """
-    Originally ported from here, but adapted to the N-d case.
-    https://github.com/hojonathanho/diffusion/blob/master/diffusion_tf/models/unet.py#L66.
-    """
-
-    def __init__(self, channels: int, heads: int = 1, head_channels: int = -1):
-        """
-        _summary_
-
-        Parameters
-        ----------
-        channels : int
-            _description_
-        heads : int, optional
-            _description_, by default 1
-        head_channels : int, optional
-            _description_, by default -1
-
-        Raises
-        ------
-        RuntimeError
-            _description_
-        """
-
-        super().__init__()
-        self.channels = channels
-        if head_channels == -1:
-            self.heads = heads
-        elif channels % head_channels != 0:
-            raise RuntimeError(
-                f"q,k,v channels {channels} is not divisible by num_head_channels {head_channels}"
-            )
-        else:
-            self.heads = channels // head_channels
-
-        self.norm = GroupNorm32(32, channels)
-        self.conv_in = nn.Conv2d(channels, channels * 3, kernel_size=1)
-
-        self.conv_out = nn.Conv2d(channels, channels, kernel_size=1)
-
-        for p in self.conv_out.parameters():
-            p.detach().zero_()
-
-    def forward(self, x: Tensor) -> Tensor:
-        # b, c, h, w = x.size()
-        x = rearrange(x, "b c h w -> b c (h w)")
-        qkv = self.conv_in(self.norm(x))
-
-        h = scaled_dot_product_attention(qkv, self.heads)
-        h = self.conv_out(h)
-
-        return rearrange((x + h), "b c (h w) -> b c h w")
 
 
 class WordAttention(nn.Module):

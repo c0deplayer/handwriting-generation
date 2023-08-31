@@ -1,3 +1,4 @@
+from einops import rearrange
 from torch import nn, Tensor
 
 from .utils import GroupNorm32
@@ -43,7 +44,7 @@ class ResBlock(nn.Module):
 
         emb = self.emb_layers(emb).type(h.dtype)
 
-        h += emb[:, :, None, None]
+        h += rearrange(emb, "b v -> b v 1 1")
 
         h = self.out_layers(h)
 
@@ -56,14 +57,12 @@ class UpSample(nn.Module):
     def __init__(self, channels: int) -> None:
         super().__init__()
 
-        # self.conv = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
-        # TODO: kernel_size 5 or 3? stride 2 or 1?
-        self.conv = nn.ConvTranspose2d(channels, channels, kernel_size=5, stride=2)
+        self.conv_trans = nn.ConvTranspose2d(
+            channels, channels, kernel_size=2, stride=2
+        )
 
     def forward(self, x: Tensor) -> Tensor:
-        # x = F.interpolate(x, scale_factor=2, mode="nearest")
-
-        return self.conv(x)
+        return self.conv_trans(x)
 
 
 class DownSample(nn.Module):

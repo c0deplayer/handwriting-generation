@@ -19,6 +19,9 @@ class CharacterEncoder(nn.Module):
         self.positional_encoding = PositionalEncoder(max_seq_len, hidden_size)()
 
     def forward(self, x: Tensor) -> Tensor:
+        if self.positional_encoding.device != x.device:
+            self.positional_encoding = self.positional_encoding.to(x.device)
+
         x = self.embedding(x)
 
         x += self.positional_encoding[: x.size(1), :]
@@ -35,7 +38,7 @@ class PositionalEncoder(nn.Module):
         )
 
     def forward(self):
-        return self.positional_encodings().detach().requires_grad_(False)
+        return self.positional_encodings.detach().requires_grad_(False)
 
     @staticmethod
     def get_positional_encoding(d_model: int, d_emb: int) -> Tensor:

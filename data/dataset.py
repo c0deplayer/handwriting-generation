@@ -1,7 +1,7 @@
 import os
 import random
 from pathlib import Path
-from typing import Literal, Any
+from typing import Any, Literal
 
 import lightning.pytorch as pl
 import torch
@@ -10,9 +10,8 @@ from einops import rearrange
 from rich.progress import track
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset, random_split
-from torchvision.transforms import Compose
 
-from configs.config import ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion
+from configs.config import ConfigDiffusion, ConfigLatentDiffusion, ConfigRNN
 from models.Diffusion.text_style import StyleExtractor
 # noinspection PyPackages
 from . import utils
@@ -39,6 +38,11 @@ class DataModule(pl.LightningDataModule):
 
         super().__init__()
 
+        if not isinstance(config, (ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion)):
+            raise TypeError(
+                f"Expected config to be ConfigDiffusion, ConfigRNN or ConfigLatentDiffusion, got {type(config)}"
+            )
+
         self.train_dataset = None
         self.val_dataset = None
         self.test_dataset = None
@@ -46,50 +50,35 @@ class DataModule(pl.LightningDataModule):
         self.dataset = dataset
         self.__config = config
         self.batch_size = config.batch_size
-        self.max_seq_len = config.max_seq_len
         self.max_text_len = config.max_text_len
         self.max_files = config.max_files
-        self.train_size = config.train_size
+        self.img_height = config.get("img_height", 90)
+        self.img_width = config.get("img_width", 1400)
+        self.max_seq_len = config.get("max_seq_len", 0)
+        self.train_size = config.get("train_size", 0.85)
         self.val_size = 1.0 - self.train_size
-
-        if isinstance(config, (ConfigDiffusion, ConfigLatentDiffusion)):
-            self.img_height = config.img_height
-            self.img_width = config.img_width
-        elif isinstance(config, ConfigRNN):
-            self.img_height = 90
-            self.img_width = 1400
-        else:
-            raise RuntimeError(
-                f"Expected ConfigDiffusion | ConfigRNN | ConfigLatentDiffusion, got {str(config)}"
-            )
 
     # noinspection PyCallingNonCallable
     def setup(self, stage: str) -> None:
         if stage == "fit":
+            # TODO: Avoid creating two separate dataset like that or pass writers dict to val_dataset to avoid
+            # TODO: mixing writer ids (writer_id_train_0 != writer_id_val_0)
             if isinstance(self.__config, ConfigLatentDiffusion):
-                transforms = torchvision.transforms.Compose(
-                    [
-                        torchvision.transforms.ToTensor(),
-                        torchvision.transforms.Normalize(
-                            (0.5, 0.5, 0.5), (0.5, 0.5, 0.5)
-                        ),
-                    ]
-                )
                 self.train_dataset = self.dataset(
                     config=self.__config,
                     img_height=self.img_height,
                     img_width=self.img_width,
                     max_text_len=self.max_text_len,
+                    max_files=self.train_size * self.max_files,
                     dataset_type="train",
-                    transforms=transforms,
                 )
                 self.val_dataset = self.dataset(
                     config=self.__config,
                     img_height=self.img_height,
                     img_width=self.img_width,
-                    max_text_len=self.max_text_len,
+                    max_files=self.val_size,
+                    max_text_len=self.max_text_len * self.max_files,
                     dataset_type="val",
-                    transforms=transforms,
                 )
             else:
                 iam_full = self.dataset(
@@ -213,26 +202,28 @@ class IAMonDataset(Dataset):
                 text = utils.fill_text(text, max_len=self.max_text_len)
                 onehot = eye[text].numpy()
 
-                image = utils.get_image(path_file_tif, height=self.img_height)
+                image = utils.get_image(
+                    path_file_tif, width=self.img_width, height=self.img_height
+                )
 
-                if strokes is None or image.shape[1] >= self.img_width:
+                if strokes is None or image.size[0] >= self.img_width:
                     continue
 
                 image = utils.pad_image(
                     image, width=self.img_width, height=self.img_height
                 )
+                writer_image = torchvision.transforms.PILToTensor()(image).to(
+                    torch.float32
+                )
                 if self.diffusion:
-                    writer_image = torch.tensor(image, dtype=torch.float32)
-                    writer_image = rearrange(writer_image, "h w -> 1 1 h w")
+                    writer_image = rearrange(writer_image, "1 h w -> 1 1 h w")
 
                     with torch.no_grad():
                         style = self.style_extractor(writer_image)
                 else:
-                    style = rearrange(
-                        torch.tensor(image, dtype=torch.float32), "h w -> 1 h w"
-                    )
+                    style = writer_image
 
-                style = rearrange(style, "1 h w -> w h").numpy()
+                style = rearrange(style, "1 h w -> w h")
 
                 dataset.append(
                     {
@@ -281,7 +272,7 @@ class IAMonDataset(Dataset):
         if self.diffusion:
             strokes = torch.tensor(self.dataset[index]["strokes"], dtype=torch.float32)
             text = torch.tensor(self.dataset[index]["text"], dtype=torch.int32)
-            style = torch.tensor(self.dataset[index]["style"], dtype=torch.float32)
+            style = self.dataset[index]["style"]
 
             strokes = self.normalize(strokes)
 
@@ -306,13 +297,19 @@ class IAMDataset(Dataset):
         img_height: int,
         img_width: int,
         max_text_len: int,
+        max_files: int,
         dataset_type: Literal["train", "val", "test"],
-        transforms: Compose,
         **kwargs,
     ) -> None:
         self.__config = config
         self.max_text_len = max_text_len
-        self.transforms = transforms
+        self.max_files = max_files
+        self.transforms = torchvision.transforms.Compose(
+            [
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ]
+        )
         self.img_height = img_height
         self.img_width = img_width
         self.dataset_type = dataset_type
@@ -328,7 +325,9 @@ class IAMDataset(Dataset):
         with open(f"{config.data_path}/{type_dict[dataset_type]}", mode="r") as f:
             self.dataset_txt = f.readlines()
 
+        self.__map_writer_id = {}
         self.__load_data()
+        print(f"Length of writer styles -- {len(self.map_writer_id)}")
 
     def __load_data(self) -> None:
         dataset = []
@@ -337,13 +336,24 @@ class IAMDataset(Dataset):
         for line in track(self.dataset_txt, description="Preparing IAM Dataloader..."):
             parts = line.split(" ")
             writer_id, image_id = parts[0].split(",")[0], parts[0].split(",")[1]
-            label = parts[1]
-
-            img_path = raw_data_path / f"{image_id}.png"
-
-            image = utils.get_image_iam(
-                img_path, width=self.img_width, height=self.img_height
+            label = parts[1].rstrip()
+            image_parts = image_id.split("-")
+            f_folder, s_folder = (
+                image_parts[0],
+                f"{image_parts[0]}-{image_parts[1]}",
             )
+
+            img_path = raw_data_path / f"words/{f_folder}/{s_folder}/{image_id}.png"
+
+            image = utils.get_image(
+                img_path,
+                width=self.img_width,
+                height=self.img_height,
+                latent=True,
+            )
+            if image is None:
+                continue
+
             image = utils.pad_image(image, width=self.img_width, height=self.img_height)
             if self.transforms is not None:
                 image = self.transforms(image)
@@ -351,7 +361,17 @@ class IAMDataset(Dataset):
             label = self.tokenizer.encode(label)
             label = utils.fill_text(label, max_len=self.max_text_len)
 
+            if label is None:
+                continue
+
             dataset.append({"writer": writer_id, "image": image, "label": label})
+
+            if writer_id not in self.__map_writer_id.keys():
+                self.__map_writer_id[writer_id] = len(self.__map_writer_id)
+
+            if self.max_files and len(dataset) >= self.max_files:
+                self.__dataset = dataset
+                return
 
         self.__dataset = dataset
 
@@ -363,12 +383,18 @@ class IAMDataset(Dataset):
     def dataset(self) -> list[dict[str, Any]]:
         return self.__dataset
 
+    @property
+    def map_writer_id(self) -> dict[str, int]:
+        return self.__map_writer_id
+
     def __len__(self) -> int:
         return len(self.dataset)
 
     def __getitem__(self, index: int) -> tuple[Tensor, Tensor, Tensor]:
-        writer = torch.IntTensor(self.dataset[index]["writer"])
-        image = self.dataset[index]["image"]
-        label = torch.LongTensor(self.dataset[index]["label"])
+        w_index = self.dataset[index]["writer"]
 
-        return writer, image, label
+        writer_id = torch.tensor(self.map_writer_id[w_index], dtype=torch.int32)
+        image = self.dataset[index]["image"]
+        label = torch.tensor(self.dataset[index]["label"], dtype=torch.long)
+
+        return writer_id, image, label
