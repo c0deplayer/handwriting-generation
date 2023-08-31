@@ -13,7 +13,7 @@ from configs.config import ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion
 from data.dataset import DataModule, IAMDataset, IAMonDataset
 from models.Diffusion.model import DiffusionModel
 from models.LatentDiffusion.model import LatentDiffusionModel
-from models.RNN.model import from RNNModel
+from models.RNN.model import RNNModel
 
 MODELS = {
     "Diffusion": DiffusionModel,
