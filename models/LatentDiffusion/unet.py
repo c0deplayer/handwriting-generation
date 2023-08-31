@@ -238,11 +238,10 @@ class UNetModel(nn.Module):
             return repeat(time_steps, "b -> b d", d=self.channels)
 
         half = self.channels // 2
+        half_zeros = torch.arange(start=0, end=half, dtype=torch.float32)
 
         frequencies = torch.exp(
-            -math.log(max_period)
-            * torch.arange(start=0, end=half, dtype=torch.float32)
-            / half,
+            -math.log(max_period) * half_zeros / half,
         ).to(device=time_steps.device)
 
         args = rearrange(time_steps, "v -> v 1").float() * rearrange(

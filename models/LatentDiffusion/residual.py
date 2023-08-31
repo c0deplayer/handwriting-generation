@@ -57,19 +57,17 @@ class UpSample(nn.Module):
     def __init__(self, channels: int) -> None:
         super().__init__()
 
-        self.conv_trans = nn.ConvTranspose2d(
-            channels, channels, kernel_size=2, stride=2
-        )
+        self.up_trans = nn.ConvTranspose2d(channels, channels, kernel_size=2, stride=2)
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.conv_trans(x)
+        return self.up_trans(x)
 
 
 class DownSample(nn.Module):
     def __init__(self, channels: int) -> None:
         super().__init__()
 
-        self.op = nn.Conv2d(channels, channels, kernel_size=3, stride=2, padding=1)
+        self.down = nn.Conv2d(channels, channels, kernel_size=3, stride=2, padding=1)
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.op(x)
+        return self.down(x)
