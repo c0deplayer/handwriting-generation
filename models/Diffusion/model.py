@@ -286,7 +286,9 @@ class DiffusionModel(pl.LightningModule):
         # noinspection PyUnboundLocalVariable
         return output, pen_lifts, attention
 
-    def training_step(self, batch: Tensor, batch_idx: int) -> Tensor:
+    def training_step(
+        self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int
+    ) -> Tensor:
         strokes, text, style = batch
         strokes, pen_lifts = strokes[:, :, :2], strokes[:, :, 2]
 
@@ -308,7 +310,9 @@ class DiffusionModel(pl.LightningModule):
 
         return loss
 
-    def validation_step(self, batch: Tensor, batch_idx: int) -> Tensor:
+    def validation_step(
+        self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int
+    ) -> Tensor:
         strokes, text, style = batch
         strokes, pen_lifts = strokes[:, :, :2], strokes[:, :, 2]
 

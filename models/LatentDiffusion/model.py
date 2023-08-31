@@ -151,7 +151,9 @@ class LatentDiffusionModel(pl.LightningModule):
             noise,
         )
 
-    def training_step(self, batch: Tensor, batch_idx: int) -> Tensor:
+    def training_step(
+        self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int
+    ) -> Tensor:
         noise_pred, noise = self(batch)
 
         loss = F.mse_loss(noise_pred, noise, reduction="mean")
@@ -159,7 +161,9 @@ class LatentDiffusionModel(pl.LightningModule):
 
         return loss
 
-    def validation_step(self, batch: Tensor, batch_idx: int) -> Tensor:
+    def validation_step(
+        self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int
+    ) -> Tensor:
         with torch.no_grad():
             noise_pred, noise = self(batch)
 
