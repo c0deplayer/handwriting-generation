@@ -91,7 +91,6 @@ if __name__ == "__main__":
     config = CONFIGS[args.config].from_yaml_file(
         file=config_file, decoder=yaml.load, Loader=yaml.Loader
     )
-    print(config.vocab_size)
 
     kwargs_trainer = dict(
         accelerator=config.device,
@@ -115,9 +114,11 @@ if __name__ == "__main__":
             vocab_size=config.vocab_size,
         )
 
-        kwargs_trainer |= dict(
-            gradient_clip_val=config.clip_grad,
-            gradient_clip_algorithm=config.clip_algorithm,
+        kwargs_trainer.update(
+            {
+                "gradient_clip_val": config.clip_grad,
+                "gradient_clip_algorithm": config.clip_algorithm,
+            }
         )
 
     elif args.config == "RNN":
@@ -133,11 +134,8 @@ if __name__ == "__main__":
 
         # * The diffusion model requires at least 32-bit precision, otherwise it generates NaN values. *
         if config.device == "cuda":
-            kwargs_trainer |= dict(
-                plugins=[
-                    MixedPrecisionPlugin(precision="16-mixed", device=config.device)
-                ],
-            )
+            plugins = [MixedPrecisionPlugin(precision="16-mixed", device=config.device)]
+            kwargs_trainer["plugins"] = plugins
     else:
         kwargs_model = dict(
             unet_params=dict(
@@ -161,11 +159,12 @@ if __name__ == "__main__":
             img_size=(config.img_height, config.img_width),
         )
 
-    # * Only for university's server, which have two GPUs *
+    # * Only for university servers that have two GPUs *
     if config.device == "cuda" and args.remote:
-        kwargs_trainer |= dict(
-            devices=[1],
-        )
+        # * Only for A100 GPU on university server *
+        # torch.set_float32_matmul_precision("medium")
+
+        kwargs_trainer["devices"] = [1]
 
     set_random_seed()
     model = MODELS[args.config](**kwargs_model)
