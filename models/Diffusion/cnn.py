@@ -63,13 +63,15 @@ class ConvBlock(nn.Module):
         self.affine_2 = AffineTransformLayer(in_features // 4, out_channels)
         self.dropout = nn.Dropout(p=drop_rate)
 
-    def forward(self, batch: tuple[Tensor, Tensor]) -> Tensor:
+    def forward(self, x: Tensor, alpha: Tensor) -> Tensor:
         """
         _summary_
 
         Parameters
         ----------
-        batch : tuple[Tensor, Tensor]
+        x : Tensor
+            _description_
+        alpha : Tensor
             _description_
 
         Returns
@@ -78,19 +80,16 @@ class ConvBlock(nn.Module):
             _description_
         """
 
-        x, alpha = batch
-
         x_skip = self.conv_skip(x)
         x = self.conv_0(F.silu(x))
-        x = self.dropout(self.affine_0((x, alpha)))
+        x = self.dropout(self.affine_0(x, alpha))
 
         x = self.conv_1(F.silu(x))
-        x = self.dropout(self.affine_1((x, alpha)))
+        x = self.dropout(self.affine_1(x, alpha))
 
         x = rearrange(x, "b h w -> b w h")
-        # x = x.permute(0, 2, 1)
         x = self.fc(F.silu(x))
-        x = self.dropout(self.affine_2((x, alpha)))
+        x = self.dropout(self.affine_2(x, alpha))
         x = rearrange(x, "b h w -> b w h")
 
         x += x_skip
@@ -109,6 +108,7 @@ class FeedForwardNetwork(nn.Module):
         super().__init__()
         self.act_before = act_before
 
+        # TODO: Testing SiLU (original implementation) with ReLU and SeLU
         ff_network = [
             nn.Linear(in_features, hidden_size),
             nn.SELU(),
@@ -122,38 +122,3 @@ class FeedForwardNetwork(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         return self.ff_net(x)
-
-
-# def feed_forward_network(
-#     in_features: int, out_features: int, *, hidden: int = 768, act_before: bool = True
-# ) -> nn.Sequential:
-#     """
-#     _summary_
-#
-#     Parameters
-#     ----------
-#     in_features : int
-#         _description_
-#     out_features : int
-#         _description_
-#     hidden : int, optional
-#         _description_, by default 768
-#     act_before : bool, optional
-#         _description_, by default True
-#
-#     Returns
-#     -------
-#     nn.Sequential
-#         _description_
-#     """
-#
-#     ff_layers = [
-#         nn.Linear(in_features, hidden),
-#         nn.SiLU(),
-#         nn.Linear(hidden, out_features),
-#     ]
-#
-#     if act_before:
-#         ff_layers.insert(0, nn.SiLU())
-#
-#     return nn.Sequential(*ff_layers)

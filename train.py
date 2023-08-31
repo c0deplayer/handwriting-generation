@@ -1,4 +1,5 @@
 import os
+import sys
 from argparse import ArgumentParser
 
 import lightning.pytorch as pl
@@ -12,18 +13,20 @@ from configs.config import ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion
 from data.dataset import DataModule, IAMDataset, IAMonDataset
 from models.Diffusion.model import DiffusionModel
 from models.LatentDiffusion.model import LatentDiffusionModel
-from models.RNN.model import RecurrentNeuralNetwork
+from models.RNN.model import from RNNModel
 
 MODELS = {
     "Diffusion": DiffusionModel,
-    "RNN": RecurrentNeuralNetwork,
+    "RNN": RNNModel,
     "LatentDiffusion": LatentDiffusionModel,
 }
+
 CONFIGS = {
     "Diffusion": ConfigDiffusion,
     "RNN": ConfigRNN,
     "LatentDiffusion": ConfigLatentDiffusion,
 }
+
 DATASETS = {
     "Diffusion": IAMonDataset,
     "RNN": IAMonDataset,
@@ -80,6 +83,9 @@ def cli_main():
 if __name__ == "__main__":
     args = cli_main()
 
+    if sys.version_info < (3, 10):
+        raise SystemExit("Only Python 3.10 and above is supported")
+
     config_file = f"configs/{args.config}/{args.config_file}"
 
     config = CONFIGS[args.config].from_yaml_file(
@@ -101,7 +107,6 @@ if __name__ == "__main__":
 
     if args.config == "Diffusion":
         kwargs_model = dict(
-            device=config.device,
             num_layers=config.num_layers,
             c1=config.channels,
             c2=config.channels * 3 // 2,
@@ -118,7 +123,6 @@ if __name__ == "__main__":
     elif args.config == "RNN":
         kwargs_model = dict(
             input_size=config.input_size,
-            device=config.device,
             hidden_size=config.hidden_size,
             num_window=config.num_window,
             num_mixture=config.num_mixture,

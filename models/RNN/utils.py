@@ -30,7 +30,6 @@ def reshape_down(
     """
 
     if ground_true is None:
-        # return batch.reshape(batch.size(0) * batch.size(1), -1)
         return rearrange(batch, "b h w -> (b h) w")
 
     if batch.size(0) != ground_true.size(0) or batch.size(1) != ground_true.size(1):
@@ -38,7 +37,6 @@ def reshape_down(
             f"Expected batch to be of shape {ground_true.size()}, got {batch.size()}"
         )
 
-    # return batch.reshape(ground_true.size(0) * ground_true.size(1), -1)
     return rearrange(
         batch, "b h w -> (b h) w", b=ground_true.size(0), h=ground_true.size(1)
     )
@@ -47,7 +45,6 @@ def reshape_down(
 def add_prefix(
     batch: tuple[Tensor, Tensor | None],
     *,
-    device: torch.device,
     return_batch: bool = True,
 ) -> tuple[tuple[Tensor, Tensor] | Tensor, Tensor]:
     """
@@ -72,7 +69,7 @@ def add_prefix(
     strokes_copy = copy.deepcopy(strokes)
     batch_size, _, input_len = strokes.size()
 
-    prefix = torch.zeros([batch_size, 1, input_len], device=device)
+    prefix = torch.zeros([batch_size, 1, input_len], device=strokes.device)
     strokes = torch.cat([prefix, strokes[:, :-1]], dim=1)
 
     return ((strokes, text), strokes_copy) if return_batch else (strokes, strokes_copy)
@@ -149,9 +146,8 @@ def get_mean_predictions(
         )
 
         loc = torch.tensor([mu_1.item(), mu_2.item()], device=device)
-        gaussian_multi = torch.distributions.MultivariateNormal(loc, covariance_matrix)
+        value = torch.distributions.MultivariateNormal(loc, covariance_matrix).sample()
 
-        value = gaussian_multi.sample()
         x, y = value[0].item(), value[1].item()
 
     eos_flag = 1 if eos > 0.5 else 0

@@ -12,11 +12,10 @@ from .network import MixtureDensityNetwork
 from .window import GaussianWindow
 
 
-class RecurrentNeuralNetwork(pl.LightningModule):
+class RNNModel(pl.LightningModule):
     def __init__(
         self,
         input_size: int,
-        device: str,
         hidden_size: int = 400,
         num_window: int = 10,
         num_mixture: int = 20,
@@ -30,8 +29,6 @@ class RecurrentNeuralNetwork(pl.LightningModule):
         Parameters
         ----------
         input_size : int
-            _description_
-        device : str
             _description_
         hidden_size : int, optional
             _description_, by default 400
@@ -50,7 +47,6 @@ class RecurrentNeuralNetwork(pl.LightningModule):
         super().__init__()
 
         self.vocab_size = vocab_size
-        self.__device = torch.device(device)
         self.hidden_size = hidden_size
         self.num_window = num_window
         self.num_mixture = num_mixture
@@ -97,7 +93,7 @@ class RecurrentNeuralNetwork(pl.LightningModule):
             )
 
     def forward(
-        self, batch: tuple[Tensor, ...], *, states: tuple[Tensor, ...] = None
+        self, batch: tuple[Tensor, Tensor], *, states: tuple[Tensor, ...] = None
     ) -> tuple[tuple[Tensor, ...], Tensor, tuple[Tensor, ...]]:
         strokes, text = batch
         batch_size, steps, _ = strokes.size()
@@ -106,7 +102,7 @@ class RecurrentNeuralNetwork(pl.LightningModule):
             states
             if states is not None
             else utils.get_initial_states(
-                batch_size, self.hidden_size, device=self.__device
+                batch_size, self.hidden_size, device=self.device
             )
         )
 
@@ -114,13 +110,13 @@ class RecurrentNeuralNetwork(pl.LightningModule):
             batch_size,
             1,
             self.vocab_size,
-            device=self.__device,
+            device=self.device,
         )
         kappa = torch.zeros(
             batch_size,
             self.num_window,
-            device=self.__device,
             dtype=torch.float32,
+            device=self.device,
         )
 
         out_1, window = [], []
@@ -129,9 +125,7 @@ class RecurrentNeuralNetwork(pl.LightningModule):
             strokes_s = strokes[:, s : s + 1, :]
             strokes_window = torch.cat([strokes_s, window_s], dim=-1)
             out_s, hidden_1 = self.lstm_0(strokes_window, hidden_1)
-            phi, kappa, window_s = self.window(
-                (out_s, text, kappa), device=self.__device
-            )
+            phi, kappa, window_s = self.window(out_s, text, kappa, device=self.device)
 
             out_1.append(out_s)
             window.append(window_s)
@@ -156,7 +150,7 @@ class RecurrentNeuralNetwork(pl.LightningModule):
         )
 
     def training_step(self, batch: tuple[Tensor, Tensor], batch_idx: int) -> float:
-        batch, strokes = utils.add_prefix(batch, device=self.__device)
+        batch, strokes = utils.add_prefix(batch)
 
         y_hat, _, _ = self(batch)
 
@@ -167,7 +161,7 @@ class RecurrentNeuralNetwork(pl.LightningModule):
         return loss
 
     def validation_step(self, batch: tuple[Tensor, Tensor], batch_idx: int) -> float:
-        batch, strokes = utils.add_prefix(batch, device=self.__device)
+        batch, strokes = utils.add_prefix(batch)
 
         with torch.no_grad():
             y_hat, _, _ = self(batch)
@@ -286,13 +280,14 @@ class RecurrentNeuralNetwork(pl.LightningModule):
 
         if not primed:
             tokenizer = Tokenizer(vocab)
-            eye = torch.eye(tokenizer.get_vocab_size(), device=self.__device)
+            eye = torch.eye(tokenizer.get_vocab_size(), device=self.device)
             indices = tokenizer.encode(raw_text)
             text = eye[indices]
         else:
+            # noinspection PyUnresolvedReferences
             text = raw_text.copy()
 
-        strokes = torch.zeros((1, 1, 3), device=self.__device)
+        strokes = torch.zeros((1, 1, 3), device=self.device)
         outputs = []
 
         for _ in range(steps):
@@ -309,7 +304,7 @@ class RecurrentNeuralNetwork(pl.LightningModule):
             mixtures = (pi, mu, sigma, rho, eos)
 
             strokes_tmp = utils.get_mean_predictions(
-                mixtures, stochastic=stochastic, device=self.__device
+                mixtures, stochastic=stochastic, device=self.device
             )
             is_last_phi_high = phi[0, 0, text.size(1) - 1] > 0.8
             is_eos = strokes_tmp[0, 2] > 0.5
@@ -359,7 +354,7 @@ class RecurrentNeuralNetwork(pl.LightningModule):
             _description_
         """
         tokenizer = Tokenizer(vocab)
-        eye = torch.eye(tokenizer.get_vocab_size(), device=self.__device)
+        eye = torch.eye(tokenizer.get_vocab_size(), device=self.device)
 
         indices = tokenizer.encode(text_priming)
         text_priming = eye[indices]
@@ -371,7 +366,6 @@ class RecurrentNeuralNetwork(pl.LightningModule):
         primed_strokes, _ = utils.add_prefix(
             (rearrange(primed_strokes, "h w -> 1 h w"), text_cat),
             return_batch=False,
-            device=self.__device,
         )
         priming_steps = primed_strokes.size(1)
 
