@@ -1,3 +1,5 @@
+from typing import Tuple, Union
+
 import lightning.pytorch as pl
 import torch
 import torch.nn as nn
@@ -21,7 +23,7 @@ class RNNModel(pl.LightningModule):
         num_mixture: int = 20,
         vocab_size: int = 73,
         bias: float = None,
-        clip_grads: tuple[float, float] = None,
+        clip_grads: Tuple[float, float] = None,
     ) -> None:
         """
         _summary_
@@ -40,7 +42,7 @@ class RNNModel(pl.LightningModule):
             _description_, by default 73
         bias : float, optional
             _description_, by default None
-        clip_grads : tuple[float, float], optional
+        clip_grads : Tuple[float, float], optional
             _description_, by default None
         """
 
@@ -79,7 +81,7 @@ class RNNModel(pl.LightningModule):
         if clip_grads[0] is not None and clip_grads[1] is not None:
             self.__register_layers_hook()
 
-    def __register_layers_hook(self):
+    def __register_layers_hook(self) -> None:
         lstm_tuple = (self.lstm_0, self.lstm_1, self.lstm_2)
         for lstm in lstm_tuple:
             for p in track(lstm.parameters(), description="Registering LSTM hook..."):
@@ -93,8 +95,8 @@ class RNNModel(pl.LightningModule):
             )
 
     def forward(
-        self, batch: tuple[Tensor, Tensor], *, states: tuple[Tensor, ...] = None
-    ) -> tuple[tuple[Tensor, ...], Tensor, tuple[Tensor, ...]]:
+        self, batch: Tuple[Tensor, Tensor], *, states: Tuple[Tensor, ...] = None
+    ) -> Tuple[Tuple[Tensor, ...], Tensor, Tuple[Tensor, ...]]:
         strokes, text = batch
         batch_size, steps, _ = strokes.size()
 
@@ -149,7 +151,7 @@ class RNNModel(pl.LightningModule):
             (hidden_1, hidden_2, hidden_3),
         )
 
-    def training_step(self, batch: tuple[Tensor, Tensor], batch_idx: int) -> float:
+    def training_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Tensor:
         batch, strokes = utils.add_prefix(batch)
 
         y_hat, _, _ = self(batch)
@@ -160,7 +162,7 @@ class RNNModel(pl.LightningModule):
 
         return loss
 
-    def validation_step(self, batch: tuple[Tensor, Tensor], batch_idx: int) -> float:
+    def validation_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Tensor:
         batch, strokes = utils.add_prefix(batch)
 
         with torch.no_grad():
@@ -182,15 +184,14 @@ class RNNModel(pl.LightningModule):
             centered=True,
         )
 
-    # noinspection PyTypeChecker
     @staticmethod
-    def loss(batch: tuple[Tensor, ...], *, eps: float = 1e-8) -> float:
+    def loss(batch: Tuple[Tensor, ...], *, eps: float = 1e-8) -> Tensor:
         """
         _summary_
 
         Parameters
         ----------
-        batch : tuple[Tensor, ...]
+        batch : Tuple[Tensor, ...]
             _description_
         eps : float, optional
             _description_, by default 1e-8
@@ -243,10 +244,10 @@ class RNNModel(pl.LightningModule):
 
     def generate(
         self,
-        raw_text: str | Tensor,
+        raw_text: Union[str, Tensor],
         *,
         vocab: str,
-        states: tuple[Tensor, ...] = None,
+        states: Tuple[Tensor, ...] = None,
         steps: int = 700,
         color: str = "black",
         primed: bool = False,
@@ -261,7 +262,7 @@ class RNNModel(pl.LightningModule):
             _description_
         vocab : str
             _description_
-        states : tuple[Tensor, ...], optional
+        states : Tuple[Tensor, ...], optional
             _description_, by default None
         steps : int, optional
             _description_, by default 700
@@ -303,9 +304,7 @@ class RNNModel(pl.LightningModule):
             )
             mixtures = (pi, mu, sigma, rho, eos)
 
-            strokes_tmp = utils.get_mean_predictions(
-                mixtures, stochastic=stochastic, device=self.device
-            )
+            strokes_tmp = utils.get_mean_predictions(mixtures, stochastic=stochastic)
             is_last_phi_high = phi[0, 0, text.size(1) - 1] > 0.8
             is_eos = strokes_tmp[0, 2] > 0.5
 

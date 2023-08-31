@@ -1,6 +1,7 @@
 import os
 import string
 from pathlib import Path
+from typing import List
 from xml.etree import ElementTree as ET
 
 import yaml
@@ -16,7 +17,7 @@ def read_lines(file_path: Path, skip_lines: int = 0):
     return [line.strip() for line in lines]
 
 
-def write_data_to_file(file_path: Path, data: list[str], description: str):
+def write_data_to_file(file_path: Path, data: List[str], description: str):
     with open(file_path, mode="w") as output:
         for row in track(data, description=description):
             output.write(f"{row}\n")

@@ -1,7 +1,7 @@
 import os
 import random
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Union, Dict, List, Tuple
 
 import lightning.pytorch as pl
 import torch
@@ -13,9 +13,7 @@ from torch.utils.data import DataLoader, Dataset, random_split
 
 from configs.config import ConfigDiffusion, ConfigLatentDiffusion, ConfigRNN
 from models.Diffusion.text_style import StyleExtractor
-# noinspection PyPackages
 from . import utils
-# noinspection PyPackages
 from .tokenizer import Tokenizer
 
 
@@ -23,7 +21,7 @@ class DataModule(pl.LightningDataModule):
     def __init__(
         self,
         dataset: Dataset,
-        config: ConfigDiffusion | ConfigRNN | ConfigLatentDiffusion,
+        config: Union[ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion],
     ) -> None:
         """
         _summary_
@@ -120,7 +118,7 @@ class IAMonDataset(Dataset):
         max_text_len: int,
         max_seq_len: int,
         max_files: int,
-        config: ConfigDiffusion | ConfigRNN,
+        config: Union[ConfigDiffusion, ConfigRNN],
         **kwargs,
     ) -> None:
         """
@@ -247,11 +245,11 @@ class IAMonDataset(Dataset):
         print(f"Size of dataset: {len(self.dataset)}")
 
     @property
-    def config(self) -> ConfigDiffusion | ConfigRNN:
+    def config(self) -> Union[ConfigDiffusion, ConfigRNN]:
         return self.__config
 
     @property
-    def dataset(self) -> list[dict[str, Any]]:
+    def dataset(self) -> List[Dict[str, Any]]:
         return self.__dataset
 
     @property
@@ -268,7 +266,7 @@ class IAMonDataset(Dataset):
     def denormalize(self, strokes: Tensor) -> Tensor:
         return strokes * self.std + self.mean
 
-    def __getitem__(self, index: int) -> tuple[Tensor, ...]:
+    def __getitem__(self, index: int) -> Tuple[Tensor, ...]:
         if self.diffusion:
             strokes = torch.tensor(self.dataset[index]["strokes"], dtype=torch.float32)
             text = torch.tensor(self.dataset[index]["text"], dtype=torch.int32)
@@ -380,17 +378,17 @@ class IAMDataset(Dataset):
         return self.__config
 
     @property
-    def dataset(self) -> list[dict[str, Any]]:
+    def dataset(self) -> List[Dict[str, Any]]:
         return self.__dataset
 
     @property
-    def map_writer_id(self) -> dict[str, int]:
+    def map_writer_id(self) -> Dict[str, int]:
         return self.__map_writer_id
 
     def __len__(self) -> int:
         return len(self.dataset)
 
-    def __getitem__(self, index: int) -> tuple[Tensor, Tensor, Tensor]:
+    def __getitem__(self, index: int) -> Tuple[Tensor, Tensor, Tensor]:
         w_index = self.dataset[index]["writer"]
 
         writer_id = torch.tensor(self.map_writer_id[w_index], dtype=torch.int32)

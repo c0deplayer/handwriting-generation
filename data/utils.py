@@ -1,7 +1,7 @@
 import warnings
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any, Union
+from typing import Any, Union, Dict, List
 
 import PIL
 import numpy as np
@@ -12,7 +12,7 @@ from rich.progress import track
 from torch import Tensor
 
 
-def get_transcription(path: Path) -> dict[str, str]:
+def get_transcription(path: Path) -> Dict[str, str]:
     """
     _summary_
 
@@ -23,7 +23,7 @@ def get_transcription(path: Path) -> dict[str, str]:
 
     Returns
     -------
-    dict[str, str]
+    Dict[str, str]
         _description_
     """
 
@@ -154,7 +154,11 @@ def get_image(
     ----------
     path : Path
         _description_
-    height : int
+    width : int
+        _description_
+    height : iny
+        _description_
+    latent : bool
         _description_
 
     Returns
@@ -229,7 +233,7 @@ def __remove_whitespaces(img: np.ndarray, *, threshold: int) -> np.ndarray:
 
 def pad_stroke(
     stroke: np.ndarray, *, max_length: int, fill_value: float = 0
-) -> np.ndarray | None:
+) -> Union[np.ndarray, None]:
     """
     _summary_
 
@@ -264,14 +268,14 @@ def pad_stroke(
 
 
 def fill_text(
-    text: list[int], *, max_len: int, pad_value: int = 0
-) -> np.ndarray | None:
+    text: List[int], *, max_len: int, pad_value: int = 0
+) -> Union[np.ndarray, None]:
     """
     _summary_
 
     Parameters
     ----------
-    text : list[int]
+    text : List[int]
         _description_
     max_len : int
         _description_
@@ -319,13 +323,13 @@ def pad_image(img: Image, *, width: int, height: int) -> Image:
         return ImageOps.pad(image=img, size=(width, height), color="white")
 
 
-def compute_mean(dataset: list[dict[str, Any]]) -> Tensor:
+def compute_mean(dataset: List[Dict[str, Any]]) -> Tensor:
     """
     _summary_
 
     Parameters
     ----------
-    dataset : list[dict[str, Any]]
+    dataset : List[Dict[str, Any]]
         _description_
 
     Returns
@@ -347,13 +351,13 @@ def compute_mean(dataset: list[dict[str, Any]]) -> Tensor:
     return mean
 
 
-def compute_std(dataset: list[dict[str, Any]]) -> Tensor:
+def compute_std(dataset: List[Dict[str, Any]]) -> Tensor:
     """
     _summary_
 
     Parameters
     ----------
-    dataset : list[dict[str, Any]]
+    dataset : List[Dict[str, Any]]
         _description_
 
     Returns

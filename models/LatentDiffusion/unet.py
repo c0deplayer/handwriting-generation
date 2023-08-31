@@ -1,4 +1,5 @@
 import math
+from typing import Tuple, List, Union
 
 import torch
 import torch.nn as nn
@@ -33,8 +34,8 @@ class UNetModel(nn.Module):
         channels: int,
         res_layers: int,
         vocab_size: int,
-        attention_levels: tuple[int],
-        channel_multipliers: tuple[int],
+        attention_levels: Tuple[int],
+        channel_multipliers: Tuple[int],
         heads: int,
         d_cond: int = 768,
         *,
@@ -111,19 +112,19 @@ class UNetModel(nn.Module):
 
     def __init_input_blocks(
         self,
-        attention_levels: tuple[int],
+        attention_levels: Tuple[int],
         channels: int,
-        channels_list: list[int],
+        channels_list: List[int],
         d_cond: int,
         d_time_emb: int,
         dropout: float,
         heads: int,
         in_channels: int,
-        input_block_channels: list[int],
+        input_block_channels: List[int],
         levels: int,
         res_layers: int,
         tf_layers: int,
-    ) -> list[int]:
+    ) -> List[int]:
         self.input_blocks = nn.ModuleList()
         self.input_blocks.append(
             TimestepEmbedSequential(
@@ -188,14 +189,14 @@ class UNetModel(nn.Module):
 
     def __init_output_blocks(
         self,
-        attention_levels: tuple[int],
+        attention_levels: Tuple[int],
         channels: int,
-        channels_list: list[int],
+        channels_list: List[int],
         d_cond: int,
         d_time_emb: int,
         dropout: float,
         heads: int,
-        input_block_channels: list[int],
+        input_block_channels: List[int],
         levels: int,
         res_layers: int,
         tf_layers: int,
@@ -261,7 +262,7 @@ class UNetModel(nn.Module):
         time_steps: Tensor,
         *,
         context: Tensor = None,
-        writer_id: Tensor | tuple[int, int] = None,
+        writer_id: Union[Tensor, Tuple[int, int]] = None,
         interpolation: bool = False,
         mix_rate: float = None,
     ) -> Tensor:
@@ -306,7 +307,7 @@ class UNetModel(nn.Module):
 
     def interpolation(
         self,
-        writer_id: tuple[int, int],
+        writer_id: Tuple[int, int],
         t_emb: Tensor,
         *,
         mix_rate: float = 1.0,

@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Dict
 
 from torch.optim.lr_scheduler import LRScheduler
 from torch.optim.optimizer import Optimizer
@@ -37,7 +37,7 @@ class InverseSqrtScheduler(LRScheduler):
         TypeError
             _description_
         """
-        
+
         if not isinstance(optimizer, Optimizer):
             raise TypeError(f"{type(optimizer).__name__} is not an Optimizer")
         if lr_mul <= 0.0:
@@ -90,7 +90,7 @@ class InverseSqrtScheduler(LRScheduler):
     @staticmethod
     def print_lr(
         is_verbose: bool,
-        group: dict[str, Any],
+        group: Dict[str, Any],
         lr: float,
         epoch: int = None,
     ) -> None:
@@ -100,12 +100,12 @@ class InverseSqrtScheduler(LRScheduler):
             else:
                 print(f"Epoch {epoch} -- Learning rate: {group:.4e} --> {lr:.4e}")
 
-    def set_lr(self, optimizer: Optimizer, lr: float):
+    def set_lr(self, optimizer: Optimizer, lr: float) -> None:
         for group in optimizer.param_groups:
             self.print_lr(self.verbose, group["lr"], lr)
             group["lr"] = lr
 
-    def update_lr(self):
+    def update_lr(self) -> float:
         self._step_count += 1
         lr = self.lr_mul * self.get_lr_scale()
         self.set_lr(self.optimizer, lr)

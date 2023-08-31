@@ -1,6 +1,5 @@
-import string
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Tuple
 
 from dataclass_wizard import YAMLWizard
 
@@ -17,9 +16,7 @@ class BaseConfig(YAMLWizard, key_transform="SNAKE"):
     data_path: str
     checkpoint_path: str
 
-    vocab: str = field(
-        default=f"_{string.ascii_letters}{string.digits}.?!,'\"-", kw_only=True
-    )
+    vocab: str
 
     def get(self, key: str, default_value: Any = None) -> Any:
         try:
@@ -64,7 +61,7 @@ class ConfigDiffusion(BaseConfig):
 
     dataset_txt: str
 
-    blacklist: tuple[str, ...] = field(
+    blacklist: Tuple[str, ...] = field(
         default=(
             "z00-001",
             "a08-551z",
@@ -92,7 +89,7 @@ class ConfigRNN(BaseConfig):
 
     dataset_txt: str
 
-    blacklist: tuple[str, ...] = field(
+    blacklist: Tuple[str, ...] = field(
         default=(
             "z00-001",
             "a08-551z",

@@ -113,7 +113,7 @@ class CrossAttention(nn.Module):
 
 
 class WordAttention(nn.Module):
-    def __init__(self, in_features: int, hidden_size: int):
+    def __init__(self, in_features: int, hidden_size: int) -> None:
         super().__init__()
 
         self.q = nn.Linear(in_features, hidden_size)

@@ -83,8 +83,8 @@ def cli_main():
 if __name__ == "__main__":
     args = cli_main()
 
-    if sys.version_info < (3, 10):
-        raise SystemExit("Only Python 3.10 and above is supported")
+    if sys.version_info < (3, 8):
+        raise SystemExit("Only Python 3.8 and above is supported")
 
     config_file = f"configs/{args.config}/{args.config_file}"
 

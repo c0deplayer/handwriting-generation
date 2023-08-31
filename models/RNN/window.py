@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import torch
 import torch.nn as nn
 from einops import reduce, repeat
@@ -24,8 +26,8 @@ class GaussianWindow(nn.Module):
         self.kappa = nn.Linear(in_features, out_features)
 
     def forward(
-        self, x: Tensor, text: Tensor, prev_kappa: Tensor, *, device: torch.device
-    ) -> tuple[Tensor, Tensor, Tensor]:
+        self, x: Tensor, text: Tensor, prev_kappa: Tensor
+    ) -> Tuple[Tensor, Tensor, Tensor]:
         """
         _summary_
 
@@ -37,12 +39,10 @@ class GaussianWindow(nn.Module):
             _description_
         prev_kappa : Tensor
             _description_
-        device : torch.device
-            _description_
 
         Returns
         -------
-        tuple[Tensor, Tensor, Tensor]
+        Tuple[Tensor, Tensor, Tensor]
             _description_
         """
 
@@ -56,7 +56,7 @@ class GaussianWindow(nn.Module):
         alpha = repeat(alpha, "h w -> h w new_axis", new_axis=num_chars)
         beta = repeat(beta, "h w -> h w new_axis", new_axis=num_chars)
         kappa = repeat(new_kappa, "h w -> h w new_axis", new_axis=num_chars)
-        u = torch.arange(num_chars, device=device)
+        u = torch.arange(num_chars, device=x.device)
 
         densities = alpha * torch.exp(-beta * (kappa - u) ** 2)
         phi = reduce(densities, "b h w -> b () w", "sum")

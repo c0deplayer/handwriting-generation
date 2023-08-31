@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -30,7 +32,7 @@ class MixtureDensityNetwork(nn.Module):
 
         self.bias = bias if bias is not None else 0.0
 
-    def forward(self, x: Tensor) -> tuple[Tensor, ...]:
+    def forward(self, x: Tensor) -> Tuple[Tensor, ...]:
         """
         _summary_
 
@@ -41,7 +43,7 @@ class MixtureDensityNetwork(nn.Module):
 
         Returns
         -------
-        tuple[Tensor, ...]
+        Tuple[Tensor, ...]
             _description_
         """
 

@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Tuple, Dict, Union
 
 import lightning.pytorch as pl
 import numpy as np
@@ -75,7 +76,7 @@ class AttentionBlock(nn.Module):
 
     def forward(
         self, x: Tensor, text: Tensor, sigma: Tensor, *, mask: Tensor
-    ) -> tuple[Tensor, Tensor]:
+    ) -> Tuple[Tensor, Tensor]:
         """
         _summary_
 
@@ -92,7 +93,7 @@ class AttentionBlock(nn.Module):
 
         Returns
         -------
-        tuple[Tensor, Tensor]
+        Tuple[Tensor, Tensor]
             _description_
         """
         if self.text_pos.device != x.device:
@@ -212,18 +213,18 @@ class DiffusionModel(pl.LightningModule):
 
         self.save_hyperparameters()
 
-    def forward(self, batch: tuple[Tensor, ...]) -> tuple[Tensor, Tensor, Tensor]:
+    def forward(self, batch: Tuple[Tensor, ...]) -> Tuple[Tensor, Tensor, Tensor]:
         """
         _summary_
 
         Parameters
         ----------
-        batch : tuple[Tensor, ...]
+        batch : Tuple[Tensor, ...]
             _description_
 
         Returns
         -------
-        tuple[Tensor, Tensor, Tensor]
+        Tuple[Tensor, Tensor, Tensor]
             _description_
         """
 
@@ -330,7 +331,7 @@ class DiffusionModel(pl.LightningModule):
 
         return loss
 
-    def configure_optimizers(self) -> dict[str, Optimizer | LRScheduler]:
+    def configure_optimizers(self) -> Dict[str, Union[Optimizer, LRScheduler]]:
         optimizer = torch.optim.AdamW(
             self.parameters(),
             lr=1e-3,
@@ -351,7 +352,7 @@ class DiffusionModel(pl.LightningModule):
         }
 
     @staticmethod
-    def loss(loss_batch: tuple[Tensor, ...]) -> Tensor:
+    def loss(loss_batch: Tuple[Tensor, ...]) -> Tensor:
         """
         _summary_
 
@@ -383,9 +384,9 @@ class DiffusionModel(pl.LightningModule):
     def generate(
         self,
         sequence: str,
-        style_path: Path | None = None,
+        vocab: str,
+        style_path: Path = None,
         diffusion_mode: str = "new",
-        show_every: bool = False,
     ) -> None:
         """
         _summary_
@@ -394,12 +395,12 @@ class DiffusionModel(pl.LightningModule):
         ----------
         sequence : str
             _description_
+        vocab : str
+            _description_
         style_path : Path | None, optional
             _description_, by default None
         diffusion_mode : str, optional
             _description_, by default "new"
-        show_every : bool, optional
-            _description_, by default False
 
         Returns
         -------
@@ -416,7 +417,7 @@ class DiffusionModel(pl.LightningModule):
                 f"{asset_dir[np.random.randint(0, len(asset_dir))]}"
             )
 
-        tokenizer = Tokenizer()
+        tokenizer = Tokenizer(vocab)
         style_extractor = StyleExtractor(device=self.device)
         beta_set = utils.get_beta_set()
         alpha_set = torch.cumprod(1 - beta_set, dim=0)
@@ -424,7 +425,7 @@ class DiffusionModel(pl.LightningModule):
         time_steps = len(sequence) * 16
         time_steps -= (time_steps % 8) + 8
 
-        writer_style = get_image(style_path, height=96)
+        writer_style = get_image(style_path, width=1400, height=96)
         writer_style = pad_image(writer_style, width=1400, height=96)
         writer_style = rearrange(torch.tensor(writer_style), "h w -> 1 1 h w")
 

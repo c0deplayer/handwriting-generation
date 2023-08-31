@@ -124,7 +124,7 @@ def new_diffusion_step(
 def generate_stroke_image(
     strokes: np.ndarray,
     *,
-    save_path: str | None = None,
+    save_path: str = None,
     scale: float = 1.0,
 ) -> plt.Figure:
     """_summary_

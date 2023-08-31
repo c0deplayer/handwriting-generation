@@ -1,13 +1,12 @@
 import copy
+from typing import Tuple, Union
 
 import torch
 from einops import rearrange
 from torch import Tensor
 
 
-def reshape_down(
-    batch: Tensor, ground_true: Tensor = None
-) -> Tensor | tuple[Tensor, ...]:
+def reshape_down(batch: Tensor, ground_true: Tensor = None) -> Tensor:
     """
     _summary_
 
@@ -20,7 +19,7 @@ def reshape_down(
 
     Returns
     -------
-    Tensor | tuple[Tensor, ...]
+    Tensor
         _description_
 
     Raises
@@ -43,25 +42,23 @@ def reshape_down(
 
 
 def add_prefix(
-    batch: tuple[Tensor, Tensor | None],
+    batch: Tuple[Tensor, Union[Tensor, None]],
     *,
     return_batch: bool = True,
-) -> tuple[tuple[Tensor, Tensor] | Tensor, Tensor]:
+) -> Tuple[Union[Tuple[Tensor, Tensor], Tensor], Tensor]:
     """
     _summary_
 
     Parameters
     ----------
-    batch : tuple[Tensor, Tensor | None]
-        _description_
-    device : torch.device
+    batch : Tuple[Tensor, Tensor | None]
         _description_
     return_batch : bool, optional
         _description_, by default True
 
     Returns
     -------
-    tuple[tuple[Tensor, Tensor] | Tensor, Tensor]:
+    Tuple[Tuple[Tensor, Tensor] | Tensor, Tensor]:
         _description_
     """
 
@@ -77,7 +74,7 @@ def add_prefix(
 
 def get_initial_states(
     batch_size: int, hidden_size: int, *, device: torch.device
-) -> tuple[tuple[Tensor, Tensor], ...]:
+) -> Tuple[Tuple[Tensor, Tensor], ...]:
     """
     _summary_
 
@@ -92,7 +89,7 @@ def get_initial_states(
 
     Returns
     -------
-    tuple[tuple[Tensor, Tensor], ...]
+    Tuple[Tuple[Tensor, Tensor], ...]
         _description_
     """
 
@@ -102,17 +99,13 @@ def get_initial_states(
     return (h_0, c_0), (h_0, c_0), (h_0, c_0)
 
 
-def get_mean_predictions(
-    mixtures: tuple[Tensor, ...], *, device: torch.device, stochastic: bool
-) -> Tensor:
+def get_mean_predictions(mixtures: Tuple[Tensor, ...], *, stochastic: bool) -> Tensor:
     """
     _summary_
 
     Parameters
     ----------
-    mixtures : tuple[Tensor, ...]
-        _description_
-    device: torch.device
+    mixtures : Tuple[Tensor, ...]
         _description_
     stochastic : bool
         _description_
@@ -142,21 +135,21 @@ def get_mean_predictions(
         covariance_xy = rho * sigma_1 * sigma_2
         covariance_matrix = torch.tensor(
             [[sigma_1**2, covariance_xy], [covariance_xy, sigma_2**2]],
-            device=device,
+            device=sigma.device,
         )
 
-        loc = torch.tensor([mu_1.item(), mu_2.item()], device=device)
+        loc = torch.tensor([mu_1.item(), mu_2.item()], device=mu.device)
         value = torch.distributions.MultivariateNormal(loc, covariance_matrix).sample()
 
         x, y = value[0].item(), value[1].item()
 
     eos_flag = 1 if eos > 0.5 else 0
 
-    return torch.tensor([x, y, eos_flag], device=device)
+    return torch.tensor([x, y, eos_flag], device=pi.device)
 
 
 def bivariate_gaussian(
-    x: Tensor, y: Tensor, mixtures: tuple[Tensor, ...], *, eps: float = 1e-16
+    x: Tensor, y: Tensor, mixtures: Tuple[Tensor, ...], *, eps: float = 1e-16
 ) -> Tensor:
     """
     _summary_
@@ -167,7 +160,7 @@ def bivariate_gaussian(
         _description_
     y : Tensor
         _description_
-    mixtures : tuple[Tensor, ...]
+    mixtures : Tuple[Tensor, ...]
         _description_
     eps : float, optional
         _description_, by default 1e-16

@@ -1,4 +1,5 @@
 import math
+from typing import Tuple, Union
 
 import torch.nn as nn
 import torch.nn.functional as F
@@ -55,7 +56,7 @@ class MultiHeadAttention(nn.Module):
 
     def forward(
         self, q: Tensor, k: Tensor, v: Tensor, *, mask: Tensor = None
-    ) -> tuple[Tensor, Tensor] | Tensor:
+    ) -> Union[Tuple[Tensor, Tensor], Tensor]:
         query = self.query(q)
         key = self.key(k)
         value = self.value(v)
@@ -83,7 +84,7 @@ class MultiHeadAttention(nn.Module):
     @staticmethod
     def scaled_dot_product_attention(
         q: Tensor, k: Tensor, v: Tensor, *, mask: Tensor = None
-    ) -> tuple[Tensor, Tensor]:
+    ) -> Tuple[Tensor, Tensor]:
         scores = q @ k.transpose(-2, -1)
         d_k = k.size(1)
         scores /= math.sqrt(d_k)

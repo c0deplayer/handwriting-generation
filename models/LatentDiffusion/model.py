@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, Tuple, Union
 
 import lightning.pytorch as pl
 import torch
@@ -16,7 +16,7 @@ from .unet import UNetModel
 
 
 class DiffusionWrapper(nn.Module):
-    def __init__(self, kwargs_unet: dict[str, Any], img_size: tuple[int, int]) -> None:
+    def __init__(self, kwargs_unet: Dict[str, Any], img_size: Tuple[int, int]) -> None:
         super().__init__()
 
         self.diffusion_model = UNetModel(**kwargs_unet)
@@ -28,7 +28,7 @@ class DiffusionWrapper(nn.Module):
         time_step: Tensor,
         *,
         context: Tensor = None,
-        writer_id: Tensor | tuple[int, int] = None,
+        writer_id: Union[Tensor, Tuple[int, int]] = None,
         interpolation: bool = False,
         mix_rate: float = None,
     ) -> Tensor:
@@ -43,9 +43,9 @@ class DiffusionWrapper(nn.Module):
 
     def generate_image_noise(
         self,
-        beta_alpha: tuple[Tensor, Tensor, Tensor],
+        beta_alpha: Tuple[Tensor, Tensor, Tensor],
         n: int,
-        writer_id: Tensor | tuple[int, int],
+        writer_id: Union[Tensor, Tuple[int, int]],
         word: Tensor,
         n_steps: int,
         *,
@@ -101,12 +101,12 @@ class DiffusionWrapper(nn.Module):
 class LatentDiffusionModel(pl.LightningModule):
     def __init__(
         self,
-        unet_params: dict[str, Any],
+        unet_params: Dict[str, Any],
         autoencoder_path: str,
         n_steps: int = 1000,
         beta_start: float = 1e-4,
         beta_end: float = 2e-2,
-        img_size: tuple[int, int] = (64, 128),
+        img_size: Tuple[int, int] = (64, 128),
     ) -> None:
         super().__init__()
 
@@ -126,10 +126,10 @@ class LatentDiffusionModel(pl.LightningModule):
 
     def forward(
         self,
-        batch: tuple[Tensor, ...],
+        batch: Tuple[Tensor, ...],
         *,
         interpolation: bool = False,
-    ) -> tuple[Tensor, Tensor]:
+    ) -> Tuple[Tensor, Tensor]:
         writers, images, text = batch
 
         images = self.autoencoder.encode(images.to(torch.float32)).latent_dist.sample()
@@ -175,7 +175,7 @@ class LatentDiffusionModel(pl.LightningModule):
         self,
         text_line: str,
         vocab: str,
-        writer_id: int | tuple[int, int],
+        writer_id: Union[int, Tuple[int, int]],
         *,
         save_path: Path,
         interpolation: bool = False,

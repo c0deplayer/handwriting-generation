@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Tuple
 
 import cv2
 import numpy as np
@@ -42,7 +43,7 @@ class FeedForwardNetwork(nn.Module):
 
 def noise_image(
     x: Tensor, time_step: Tensor, alpha_bar: Tensor
-) -> tuple[Tensor, Tensor]:
+) -> Tuple[Tensor, Tensor]:
     sqrt_alpha_bar = rearrange(torch.sqrt(alpha_bar[time_step]), "v -> v 1 1 1")
     sqrt_one_minus_alpha_bar = rearrange(
         torch.sqrt(1 - alpha_bar[time_step]), "v -> v 1 1 1"

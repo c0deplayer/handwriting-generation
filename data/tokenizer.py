@@ -1,3 +1,5 @@
+from typing import List, Union
+
 import numpy as np
 from torch import Tensor
 
@@ -20,7 +22,7 @@ class Tokenizer:
         self.token_to_char = {i: char for char, i in self.char_to_token.items()}
         self.token_to_char[0], self.token_to_char[1] = " ", "<end>"  # only for decoding
 
-    def encode(self, text: str) -> list[int]:
+    def encode(self, text: str) -> List[int]:
         """
         _summary_
 
@@ -31,7 +33,7 @@ class Tokenizer:
 
         Returns
         -------
-        list[int]
+        List[int]
             _description_
         """
 
@@ -40,13 +42,13 @@ class Tokenizer:
 
         return tokens
 
-    def decode(self, tokens: list[int] | Tensor) -> str:
+    def decode(self, tokens: Union[List[int], Tensor]) -> str:
         """
         _summary_
 
         Parameters
         ----------
-        tokens : list[int] | Tensor
+        tokens : List[int] | Tensor
             _description_u
 
         Returns

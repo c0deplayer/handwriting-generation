@@ -104,7 +104,7 @@ class FeedForwardNetwork(nn.Module):
         *,
         hidden_size: int = 768,
         act_before: bool = True,
-    ):
+    ) -> None:
         super().__init__()
         self.act_before = act_before
 
