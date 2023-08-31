@@ -286,7 +286,9 @@ class UNetModel(nn.Module):
 
             t_emb = self.interpolation(writer_id, t_emb, mix_rate=mix_rate)
         elif not isinstance(writer_id, Tensor):
-            raise TypeError(f"Expected writer_id to be Tensor, got {type(writer_id)}")
+            raise TypeError(
+                f"Expected writer_id to be Tensor, got {type(writer_id).__name__}"
+            )
         else:
             t_emb = t_emb + self.label_emb(writer_id)
 
@@ -314,7 +316,7 @@ class UNetModel(nn.Module):
     ) -> Tensor:
         if not isinstance(writer_id, tuple):
             raise TypeError(
-                f"Expected writer_id to be tuple for interpolation, got {type(writer_id)}"
+                f"Expected writer_id to be tuple for interpolation, got {type(writer_id).__name__}"
             )
         if writer_id[0] == writer_id[1]:
             raise ValueError("Writer IDs must be unique")
