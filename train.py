@@ -6,7 +6,12 @@ import lightning.pytorch as pl
 import numpy as np
 import torch
 import yaml
-from lightning.pytorch.callbacks import RichModelSummary, RichProgressBar
+from lightning.pytorch.callbacks import (
+    RichModelSummary,
+    RichProgressBar,
+    EarlyStopping,
+    ModelCheckpoint,
+)
 from lightning.pytorch.plugins import MixedPrecisionPlugin
 
 from configs.config import ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion
@@ -96,11 +101,17 @@ if __name__ == "__main__":
         accelerator=config.device,
         default_root_dir=config.checkpoint_path,
         max_epochs=config.max_epochs,
-        enable_checkpointing=True,
-        enable_model_summary=True,
         callbacks=[
-            RichModelSummary(max_depth=2),
+            RichModelSummary(max_depth=3),
             RichProgressBar(refresh_rate=1),
+            EarlyStopping(monitor="val_loss", patience=25),
+            ModelCheckpoint(
+                dirpath=config.checkpoint_path,
+                monitor="val_loss",
+                filename="{epoch}-{loss:.2f}-{val_loss:.2f}",
+                save_top_k=5,
+                # verbose=True,
+            ),
         ],
     )
 
