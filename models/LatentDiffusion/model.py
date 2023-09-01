@@ -172,8 +172,10 @@ class LatentDiffusionModel(pl.LightningModule):
 
         return loss
 
-    def configure_optimizers(self) -> Optimizer:
-        return torch.optim.AdamW(self.parameters(), lr=1e-4)
+    def configure_optimizers(self) -> Dict[str, Optimizer]:
+        optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4)
+
+        return {"optimizer": optimizer}
 
     def generate(
         self,

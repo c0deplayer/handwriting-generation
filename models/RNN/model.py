@@ -1,4 +1,4 @@
-from typing import Tuple, Union
+from typing import Tuple, Union, Dict
 
 import lightning.pytorch as pl
 import torch
@@ -174,15 +174,10 @@ class RNNModel(pl.LightningModule):
 
         return loss
 
-    def configure_optimizers(self) -> Optimizer:
-        return torch.optim.RMSprop(
-            self.parameters(),
-            lr=1e-4,
-            momentum=0.9,
-            weight_decay=1e-4,
-            alpha=0.95,
-            centered=True,
-        )
+    def configure_optimizers(self) -> Dict[str, Optimizer]:
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4, weight_decay=1e-4)
+
+        return {"optimizer": optimizer}
 
     @staticmethod
     def loss(batch: Tuple[Tensor, ...], *, eps: float = 1e-8) -> Tensor:
