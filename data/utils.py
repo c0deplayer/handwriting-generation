@@ -6,7 +6,8 @@ from typing import Any, Union, Dict, List
 import PIL
 import numpy as np
 import torch
-from PIL import Image, ImageOps
+from PIL import Image as image, ImageOps
+from PIL.Image import Image
 from numpy.linalg import norm
 from rich.progress import track
 from torch import Tensor
@@ -175,7 +176,7 @@ def get_image(
     if not path.is_file():
         raise FileNotFoundError(f"The image was not found: {path}")
     try:
-        img = Image.open(path)
+        img = image.open(path)
     except PIL.UnidentifiedImageError:
         return None
 
@@ -185,10 +186,10 @@ def get_image(
 
         # noinspection PyTypeChecker
         img = __remove_whitespaces(np.array(img).astype("uint8"), threshold=127)
-        img = Image.fromarray(img, mode="L")
+        img = image.fromarray(img, mode="L")
 
         w, h = img.size
-        img = img.resize(size=(w * height // h, height), resample=Image.BILINEAR)
+        img = img.resize(size=(w * height // h, height), resample=image.BILINEAR)
 
     else:
         if img.mode != "RGB":
@@ -196,11 +197,11 @@ def get_image(
 
         w, h = img.size
 
-        img = img.resize(size=(w * height // h, height), resample=Image.ANTIALIAS)
+        img = img.resize(size=(w * height // h, height), resample=image.ANTIALIAS)
         w, h = img.size
 
         if w > width:
-            img = img.resize(size=(width, height), resample=Image.ANTIALIAS)
+            img = img.resize(size=(width, height), resample=image.ANTIALIAS)
 
     return img
 
