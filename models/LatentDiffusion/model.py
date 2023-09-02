@@ -124,6 +124,8 @@ class LatentDiffusionModel(pl.LightningModule):
         alpha_bar = torch.cumprod(self.alpha, dim=0)
         self.alpha_bar = nn.Parameter(alpha_bar.to(torch.float32), requires_grad=False)
 
+        self.save_hyperparameters()
+
     def forward(
         self,
         batch: Tuple[Tensor, ...],

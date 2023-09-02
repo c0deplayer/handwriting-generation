@@ -81,6 +81,8 @@ class RNNModel(pl.LightningModule):
         if clip_grads[0] is not None and clip_grads[1] is not None:
             self.__register_layers_hook()
 
+        self.save_hyperparameters()
+
     def __register_layers_hook(self) -> None:
         lstm_tuple = (self.lstm_0, self.lstm_1, self.lstm_2)
         for lstm in lstm_tuple:
@@ -175,7 +177,7 @@ class RNNModel(pl.LightningModule):
         return loss
 
     def configure_optimizers(self) -> Dict[str, Optimizer]:
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4, weight_decay=1e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=8e-4, weight_decay=1e-4)
 
         return {"optimizer": optimizer}
 
@@ -311,7 +313,14 @@ class RNNModel(pl.LightningModule):
             outputs.append(strokes_tmp)
             strokes = rearrange(strokes_tmp, "x y eos -> 1 x y eos")
 
-        return torch.cat(outputs, dim=0)
+        strokes = torch.cat(outputs, dim=0)
+        save_path = (
+            "/home/codeplayer/Studia/Inżynierka/handwriting-generation/handwriting.png"
+        )
+
+        generate_stroke_image(
+            strokes.detach().cpu().numpy(), scale=1.0, save_path=save_path
+        )
 
     # TODO: Complete, Check and Test (CCT)
     def generate_primed(
