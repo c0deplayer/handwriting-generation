@@ -74,8 +74,8 @@ class DataModule(pl.LightningDataModule):
                     config=self.__config,
                     img_height=self.img_height,
                     img_width=self.img_width,
-                    max_files=self.val_size,
-                    max_text_len=self.max_text_len * self.max_files,
+                    max_text_len=self.max_text_len,
+                    max_files=self.val_size * self.max_files,
                     dataset_type="val",
                 )
             else:
