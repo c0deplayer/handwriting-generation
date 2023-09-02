@@ -197,11 +197,11 @@ def get_image(
 
         w, h = img.size
 
-        img = img.resize(size=(w * height // h, height), resample=image.ANTIALIAS)
+        img = img.resize(size=(w * height // h, height), resample=image.LANCZOS)
         w, h = img.size
 
         if w > width:
-            img = img.resize(size=(width, height), resample=image.ANTIALIAS)
+            img = img.resize(size=(width, height), resample=image.LANCZOS)
 
     return img
 
