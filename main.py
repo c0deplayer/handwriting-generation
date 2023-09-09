@@ -1,6 +1,9 @@
+import contextlib
 import os
+import random
 import sys
 from argparse import ArgumentParser
+from pathlib import Path
 
 import lightning.pytorch as pl
 import numpy as np
@@ -9,13 +12,12 @@ import yaml
 from lightning.pytorch.callbacks import (
     RichModelSummary,
     RichProgressBar,
-    EarlyStopping,
     ModelCheckpoint,
 )
-from lightning.pytorch.plugins import MixedPrecisionPlugin
 
 from configs.config import ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion
-from data.dataset import DataModule, IAMDataset, IAMonDataset
+from data import utils
+from data.dataset import IAMDataset, IAMonDataset, DataModule
 from models.Diffusion.model import DiffusionModel
 from models.LatentDiffusion.model import LatentDiffusionModel
 from models.RNN.model import RNNModel
@@ -41,15 +43,13 @@ DATASETS = {
 
 def set_random_seed(
     seed: int = 42,
-    precision: int = 10,
     deterministic: bool = False,
 ) -> None:
-    # random.seed(seed)
+    random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    torch.set_printoptions(precision=precision)
     os.environ["PYTHONHASHSEED"] = str(seed)
 
     if deterministic:
@@ -74,43 +74,98 @@ def cli_main():
         type=str,
         default="base_gpu.yaml",
     )
-
     parser.add_argument(
         "-r",
         "--remote",
         help="Flag for training on remote server",
         action="store_true",
     )
+    parser.add_argument(
+        "--prepare-data",
+        help="Flag for saving preprocessed dataset to H5 file",
+        action="store_true",
+    )
+    parser.add_argument("--generate", help="...", action="store_true")
+    parser.add_argument("--train", help="...", action="store_true")
 
     return parser.parse_args()
 
 
-if __name__ == "__main__":
-    args = cli_main()
+def prepare_data():
+    global dataset
 
-    if sys.version_info < (3, 8):
-        raise SystemExit("Only Python 3.8 and above is supported")
+    if args.config in ("Diffusion", "RNN"):
+        h5_file_path = Path("data/h5_dataset/train_val_iamondb.h5")
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(h5_file_path)
 
-    config_file = f"configs/{args.config}/{args.config_file}"
+        kwargs_dataset = dict(
+            config=config,
+            img_height=config.get("img_height", 90),
+            img_width=config.get("img_width", 1400),
+            max_text_len=config.max_text_len,
+            max_seq_len=config.max_seq_len,
+            max_files=config.max_files,
+        )
+        dataset = DATASETS[args.config](**kwargs_dataset)
+        utils.save_dataset_to_h5(dataset.dataset, h5_file_path)
 
-    config = CONFIGS[args.config].from_yaml_file(
-        file=config_file, decoder=yaml.load, Loader=yaml.Loader
-    )
+    else:
+        train_size = config.get("train_size", 0.85)
+        val_size = 1.0 - train_size
+        h5_file_path = Path("data/h5_dataset/train_iamdb.h5")
 
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(h5_file_path)
+
+        kwargs_dataset = dict(
+            config=config,
+            img_height=config.get("img_height", 90),
+            img_width=config.get("img_width", 1400),
+            max_text_len=config.max_text_len,
+            max_files=train_size * config.max_files,
+            dataset_type="train",
+        )
+
+        dataset = DATASETS[args.config](**kwargs_dataset)
+        utils.save_dataset_to_h5(
+            dataset.dataset,
+            h5_file_path,
+            latent=True,
+            map_writer_ids=dataset.map_writer_id,
+        )
+
+        h5_file_path = Path("data/h5_dataset/val_iamdb.h5")
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(h5_file_path)
+
+        kwargs_dataset["max_files"] = val_size * config.max_files
+        kwargs_dataset["dataset_type"] = "val"
+
+        dataset = DATASETS[args.config](**kwargs_dataset)
+        utils.save_dataset_to_h5(
+            dataset.dataset,
+            h5_file_path,
+            latent=True,
+            map_writer_ids=dataset.map_writer_id,
+        )
+
+
+def train_model():
+    global dataset
     kwargs_trainer = dict(
         accelerator=config.device,
         default_root_dir=config.checkpoint_path,
         max_epochs=config.max_epochs,
         callbacks=[
             RichModelSummary(max_depth=3),
-            RichProgressBar(refresh_rate=1),
-            EarlyStopping(monitor="val_loss", patience=25),
+            RichProgressBar(refresh_rate=1, leave=True),
+            # EarlyStopping(monitor="val_loss", patience=25),
             ModelCheckpoint(
                 dirpath=config.checkpoint_path,
                 monitor="val_loss",
                 filename="{epoch}-{loss:.2f}-{val_loss:.2f}",
-                save_top_k=5,
-                # verbose=True,
+                save_top_k=10,
             ),
         ],
     )
@@ -143,10 +198,6 @@ if __name__ == "__main__":
             clip_grads=(config.lstm_clip, config.mdn_clip),
         )
 
-        # * The diffusion model requires at least 32-bit precision, otherwise it generates NaN values. *
-        if config.device == "cuda":
-            plugins = [MixedPrecisionPlugin(precision="16-mixed", device=config.device)]
-            kwargs_trainer["plugins"] = plugins
     else:
         kwargs_model = dict(
             unet_params=dict(
@@ -161,7 +212,7 @@ if __name__ == "__main__":
                 d_cond=config.d_cond,
                 n_style_classes=340,  # TODO: This should not be hardcoded !
                 dropout=config.drop_rate,
-                max_seq_len=config.max_text_len,
+                max_seq_len=config.max_text_len + 2,
             ),
             autoencoder_path=config.autoencoder_path,
             n_steps=config.n_steps,
@@ -181,19 +232,39 @@ if __name__ == "__main__":
     model = MODELS[args.config](**kwargs_model)
     dataset = DATASETS[args.config]
     data_module = DataModule(config=config, dataset=dataset)
-    trainer = pl.Trainer(**kwargs_trainer)
 
+    trainer = pl.Trainer(**kwargs_trainer)
     trainer.fit(model=model, datamodule=data_module)
     trainer.save_checkpoint(filepath=f"{config.checkpoint_path}/model.ckpt")
 
-    # model = HandwritingSynthesisDiffusion.load_from_checkpoint(
-    #     checkpoint_path=f"{config.checkpoint_path}/model.ckpt",
-    #     # map_location=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
-    #     map_location=torch.device("cpu"),
-    # )
-    #
-    # model.eval()
-    #
-    # style_path = Path(f"assets/{os.listdir('assets')[0]}")
-    #
-    # model.generate("Handwriting Synthesis ", style_path)
+
+def generate_handwriting() -> None:
+    model = MODELS[args.config].load_from_checkpoint(
+        checkpoint_path=f"{config.checkpoint_path}/model.ckpt",
+        map_location=torch.device(config.device),
+    )
+    model.eval()
+    model.generate("Handwriting Synthesis", vocab=config.vocab)
+
+
+if __name__ == "__main__":
+    args = cli_main()
+    dataset = None
+
+    if sys.version_info < (3, 8):
+        raise SystemExit("Only Python 3.8 and above is supported")
+
+    config_file = f"configs/{args.config}/{args.config_file}"
+
+    config = CONFIGS[args.config].from_yaml_file(
+        file=config_file, decoder=yaml.load, Loader=yaml.Loader
+    )
+
+    if args.prepare_data:
+        prepare_data()
+    elif args.generate:
+        generate_handwriting()
+    elif args.train:
+        train_model()
+    else:
+        raise ValueError("The selected argument does not exist")
