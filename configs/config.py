@@ -55,7 +55,7 @@ class ConfigDiffusion(BaseConfig):
 
     num_layers: int
     channels: int
-    drop_rate: int
+    drop_rate: float
     clip_grad: float
     clip_algorithm: str
 
