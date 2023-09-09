@@ -173,3 +173,6 @@ model_checkpoints/
 
 # Private files/backups (Python)
 __*.py
+
+# _
+data/h5_dataset/

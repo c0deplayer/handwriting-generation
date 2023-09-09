@@ -1,16 +1,17 @@
-import warnings
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any, Union, Dict, List
+from typing import Union, Dict, List, Tuple, Any
 
 import PIL
+import h5py
 import numpy as np
 import torch
-from PIL import Image as image, ImageOps
+from PIL import Image as ImageModule, ImageOps
 from PIL.Image import Image
-from numpy.linalg import norm
 from rich.progress import track
-from torch import Tensor
+from scipy.signal import savgol_filter
+
+from .tokenizer import Tokenizer
 
 
 def get_transcription(path: Path) -> Dict[str, str]:
@@ -41,7 +42,7 @@ def get_transcription(path: Path) -> Dict[str, str]:
     }
 
 
-def get_line_stroke(path: Path, *, diffusion: bool) -> np.ndarray:
+def get_line_strokes(path: Path, max_length: int) -> np.array:
     """
     _summary_
 
@@ -49,12 +50,12 @@ def get_line_stroke(path: Path, *, diffusion: bool) -> np.ndarray:
     ----------
     path : Path
         _description_
-    diffusion : bool
-        _description_,
+    max_length : int
+        _description_
 
     Returns
     -------
-    np.ndarray
+    np.array
         _description_
 
     Raises
@@ -75,79 +76,62 @@ def get_line_stroke(path: Path, *, diffusion: bool) -> np.ndarray:
         raise ValueError("No StrokeSet element found in XML file")
 
     strokes_cord = []
-    prev_cord = None
 
     for stroke in stroke_set_tag.findall("Stroke"):
-        for point in stroke.findall("Point"):
-            x, y = float(point.attrib["x"]), float(point.attrib["y"])
+        strokes_cord.extend(
+            [float(point.attrib["x"]), -float(point.attrib["y"]), 0.0]
+            for point in stroke.findall("Point")
+        )
+        strokes_cord[-1][2] = 1.0
 
-            if prev_cord is not None:
-                dx, dy = x - prev_cord[0], -y - prev_cord[1]
-                strokes_cord.append([dx, dy, 0.0])
+    strokes = np.array(strokes_cord, dtype=np.float32)
+    strokes = __denoise_strokes(strokes)
+    # strokes[:, 2] = np.roll(strokes[:, 2], 1)
+    strokes[:, :2] /= np.std(strokes[:, :2])
 
-            prev_cord = [x, -y]
-
-        if strokes_cord:
-            strokes_cord[-1][-1] = 1.0
-        else:
-            strokes_cord.append([prev_cord[0], prev_cord[1], 1.0])
-
-    strokes = np.array(strokes_cord)
-    strokes[:, 2] = np.roll(strokes[:, 2], 1)
-
-    # TODO: Test if combine_strokes will make RNN better
-    # ? Apply std based on on set of strokes or whole dataset ?
-    # if diffusion:
-    #     strokes[:, :2] /= np.std(strokes[:, :2], axis=0)
-    #
-    #     for _ in range(3):
-    #         strokes = __combine_strokes(strokes, int(len(strokes) * 0.2))
-
-    return strokes
+    return __pad_strokes(strokes, max_length)
 
 
-def __combine_strokes(strokes: np.ndarray, n: int) -> np.ndarray:
+def __denoise_strokes(strokes: np.array) -> np.array:
     """
     _summary_
 
     Parameters
     ----------
-    strokes : np.ndarray
-        _description_
-    n : int
+    strokes : np.array
         _description_
 
     Returns
     -------
-    np.ndarray
+    np.array
         _description_
     """
 
-    s, s_neighbors = strokes[::2, :2], strokes[1::2, :2]
+    stroke_segments = np.split(strokes, np.where(strokes[:, 2] == 1)[0] + 1, axis=0)
+    n_strokes = []
 
-    if len(strokes) % 2 != 0:
-        warnings.warn(
-            "The number of strokes is odd, so the last stroke will be ignored.",
-            UserWarning,
-        )
-        s = s[:-1]
+    for strokes in stroke_segments:
+        if len(strokes) != 0:
+            x_smooth = savgol_filter(
+                strokes[:, 0], window_length=7, polyorder=3, mode="nearest"
+            )
+            y_smooth = savgol_filter(
+                strokes[:, 1], window_length=7, polyorder=3, mode="nearest"
+            )
+            smoothed_stroke = np.column_stack((x_smooth, y_smooth, strokes[:, 2]))
+            n_strokes.append(smoothed_stroke)
 
-    values = (
-        norm(s, axis=-1) + norm(s_neighbors, axis=-1) - norm(s + s_neighbors, axis=-1)
+    strokes = np.vstack(n_strokes)
+    diffs = np.concatenate(
+        [strokes[1:, :2] - strokes[:-1, :2], strokes[1:, 2:3]], axis=1
     )
-    indices = np.argsort(values)[:n]
 
-    strokes[indices * 2] += strokes[indices * 2 + 1]
-    strokes[indices * 2, 2] = np.greater(strokes[indices * 2, 2], 0)
-    strokes = np.delete(strokes, indices * 2 + 1, axis=0)
-    strokes[:, :2] /= np.std(strokes[:, :2])
-
-    return strokes
+    return np.vstack((np.array([[0.0, 0.0, 0.0]]), diffs))
 
 
 def get_image(
-    path: Path, *, width: int, height: int, latent: bool = False
-) -> Union[Image, None]:
+    path: Path, width: int, height: int, *, latent: bool = False
+) -> Union[Tuple[Image, Image], Tuple[None, None]]:
     """
     _summary_
 
@@ -157,14 +141,14 @@ def get_image(
         _description_
     width : int
         _description_
-    height : iny
+    height : int
         _description_
-    latent : bool
-        _description_
+    latent : bool, optional
+        _description_, by default False
 
     Returns
     -------
-    Image | None
+    Union[Tuple[Image, Image], Tuple[None, None]]
         _description_
 
     Raises
@@ -173,12 +157,12 @@ def get_image(
         _description_
     """
 
-    if not path.is_file():
-        raise FileNotFoundError(f"The image was not found: {path}")
     try:
-        img = image.open(path)
+        img = ImageModule.open(path)
     except PIL.UnidentifiedImageError:
-        return None
+        return None, None
+    except FileNotFoundError as e:
+        raise f"The image was not found: {path}" from e
 
     if not latent:
         if img.mode != "L":
@@ -186,10 +170,10 @@ def get_image(
 
         # noinspection PyTypeChecker
         img = __remove_whitespaces(np.array(img).astype("uint8"), threshold=127)
-        img = image.fromarray(img, mode="L")
+        img = ImageModule.fromarray(img, mode="L")
 
         w, h = img.size
-        img = img.resize(size=(w * height // h, height), resample=image.BILINEAR)
+        img = img.resize(size=(w * height // h, height), resample=ImageModule.BILINEAR)
 
     else:
         if img.mode != "RGB":
@@ -197,29 +181,66 @@ def get_image(
 
         w, h = img.size
 
-        img = img.resize(size=(w * height // h, height), resample=image.LANCZOS)
+        img = img.resize(size=(w * height // h, height), resample=ImageModule.LANCZOS)
         w, h = img.size
 
         if w > width:
-            img = img.resize(size=(width, height), resample=image.LANCZOS)
+            img = img.resize(size=(width, height), resample=ImageModule.LANCZOS)
 
-    return img
+    return __pad_image(img, width, height)
 
 
-def __remove_whitespaces(img: np.ndarray, *, threshold: int) -> np.ndarray:
+def get_onehot_encoding(
+    text: str, tokenizer: Tokenizer, max_len: int, *, pad_value: int = 0
+) -> Tuple[np.array, np.array]:
     """
     _summary_
 
     Parameters
     ----------
-    img : np.ndarray
+    text : str
+        _description_
+    tokenizer : Tokenizer
+        _description_
+    max_len : int
+        _description_
+    pad_value : int, optional
+        _description_, by default 0
+
+    Returns
+    -------
+    Tuple[np.array, np.array]
+        _description_
+    """
+
+    eye = torch.eye(tokenizer.get_vocab_size())
+    text = tokenizer.encode(text)
+
+    text_len = len(text)
+    max_len += 2
+
+    if text_len <= max_len:
+        padded_text = np.full((max_len - text_len,), pad_value)
+        # noinspection PyTypeChecker
+        text = np.concatenate((text, padded_text))
+
+    return eye[text].numpy(), text
+
+
+def __remove_whitespaces(img: np.array, *, threshold: int) -> np.array:
+    """
+    _summary_
+
+    Parameters
+    ----------
+    img : np.array
         _description_
     threshold : int
         _description_
 
     Returns
     -------
-    np.ndarray
+    np.array
         _description_
     """
 
@@ -232,15 +253,15 @@ def __remove_whitespaces(img: np.ndarray, *, threshold: int) -> np.ndarray:
     return img[rows[0] : rows[-1], cols[0] : cols[-1]]
 
 
-def pad_stroke(
-    stroke: np.ndarray, *, max_length: int, fill_value: float = 0
-) -> Union[np.ndarray, None]:
+def __pad_strokes(
+    strokes: np.array, max_length: int, *, fill_value: float = 0
+) -> Union[np.array, None]:
     """
     _summary_
 
     Parameters
     ----------
-    stroke : np.ndarray
+    strokes : np.array
         _description_
     max_length : int
         _description_
@@ -249,64 +270,32 @@ def pad_stroke(
 
     Returns
     -------
-    np.ndarray | None
+    np.array | None
         _description_
     """
 
-    stroke_len = len(stroke)
-    stroke_tmp = stroke[:, :2] / np.std(stroke[:, :2], axis=0)
+    if max_length:
+        stroke_len = len(strokes)
 
-    # ? Hu ?
-    if stroke_len > max_length or np.amax(np.abs(stroke_tmp)) > 15:
-        return None
+        if stroke_len > max_length or np.amax(np.abs(strokes)) > 15:
+            return None
 
-    padded_strokes = np.full((max_length, 3), fill_value, dtype=np.float32)
-    padded_strokes[:, 2] = 1
-    padded_strokes[:stroke_len, :2] = stroke[:, :2]
-    padded_strokes[:stroke_len, 2] = stroke[:, 2]
+        padded_strokes = np.full((max_length, 3), fill_value, dtype=np.float32)
+        padded_strokes[:, 2] = 1.0
+        padded_strokes[:stroke_len, :] = strokes[:, :]
+    else:
+        padded_strokes = strokes
 
     return padded_strokes
 
 
-def fill_text(
-    text: List[int], *, max_len: int, pad_value: int = 0
-) -> Union[np.ndarray, None]:
+def __pad_image(img: Image, width: int, height: int) -> Tuple[Image, Image]:
     """
     _summary_
 
     Parameters
     ----------
-    text : List[int]
-        _description_
-    max_len : int
-        _description_
-    pad_value : int, optional
-        _description_, by default 0
-
-    Returns
-    -------
-    np.ndarray
-        _description_
-    """
-
-    text_len = len(text)
-    if text_len > max_len:
-        return None
-
-    padded_text = np.full((max_len - text_len,), pad_value)
-    # noinspection PyTypeChecker
-    text = np.concatenate((text, padded_text))
-
-    return text
-
-
-def pad_image(img: Image, *, width: int, height: int) -> Image:
-    """
-    _summary_
-
-    Parameters
-    ----------
-    img : np.ndarray
+    img : Image
         _description_
     width : int
         _description_
@@ -315,69 +304,14 @@ def pad_image(img: Image, *, width: int, height: int) -> Image:
 
     Returns
     -------
-    np.ndarray
+    Tuple[Image, Image]
         _description_
     """
+
     if img.size[0] > width:
-        return img
+        return img, img
     else:
-        return ImageOps.pad(image=img, size=(width, height), color="white")
-
-
-def compute_mean(dataset: List[Dict[str, Any]]) -> Tensor:
-    """
-    _summary_
-
-    Parameters
-    ----------
-    dataset : List[Dict[str, Any]]
-        _description_
-
-    Returns
-    -------
-    Tensor
-        _description_
-    """
-
-    strokes = []
-
-    for item in track(dataset, description="Computing mean..."):
-        strokes.extend(iter(item["strokes"]))
-
-    strokes = torch.tensor(strokes, dtype=torch.float32)
-
-    mean = strokes.mean(axis=0)
-    mean[2] = 0.0
-
-    return mean
-
-
-def compute_std(dataset: List[Dict[str, Any]]) -> Tensor:
-    """
-    _summary_
-
-    Parameters
-    ----------
-    dataset : List[Dict[str, Any]]
-        _description_
-
-    Returns
-    -------
-    Tensor
-        _description_
-    """
-
-    strokes = []
-
-    for item in track(dataset, description="Computing std..."):
-        strokes.extend(iter(item["strokes"]))
-
-    strokes = torch.tensor(strokes, dtype=torch.float32)
-
-    std = strokes.std(axis=0)
-    std[2] = 1.0
-
-    return std
+        return ImageOps.pad(image=img, size=(width, height), color="white"), img
 
 
 def get_max_seq_len(strokes_path: Path) -> int:
@@ -401,8 +335,119 @@ def get_max_seq_len(strokes_path: Path) -> int:
     for path_xml_file in track(
         xml_file, description="Calculating max sequence length..."
     ):
-        strokes = get_line_stroke(path_xml_file, diffusion=True)
+        strokes = get_line_strokes(path_xml_file, 0)
         max_length = max(max_length, len(strokes))
 
     print(f"Max sequence length is {max_length}")
     return max_length
+
+
+def load_dataset_from_h5(
+    path: Path, max_files: int, *, latent: bool = False
+) -> Tuple[List[Dict[str, Any]], Union[None, Dict[str, int]]]:
+    """
+    _summary_
+
+    Parameters
+    ----------
+    path : Path
+        _description_
+    max_files : int
+        _description_
+    latent : bool, optional
+        _description_, by default False
+
+    Returns
+    -------
+    Tuple[List[Dict[str, Any]], Union[None, Dict[str, int]]]
+        _description_
+    """
+
+    with h5py.File(path, mode="r") as f:
+        dataset = []
+        map_writer_id = {}
+
+        for group_name in track(
+            f["dataset_group"], description="Loading dataset from H5 file..."
+        ):
+            group = f["dataset_group"][group_name]
+            writer_id = group.attrs["writer"]
+
+            if latent:
+                data_dict = {
+                    "writer": writer_id,
+                    "image": torch.tensor(np.array(group["image"])),
+                    "label": np.array(group["label"]),
+                }
+                if writer_id not in map_writer_id.keys():
+                    map_writer_id[writer_id] = group.attrs["writer_map"]
+
+            else:
+                data_dict = {
+                    "writer": writer_id,
+                    "file": group.attrs["file"],
+                    "raw_text": group.attrs["raw_text"],
+                    "strokes": np.array(group["strokes"]),
+                    "text": np.array(group["text"]),
+                    "onehot": np.array(group["onehot"]),
+                    "image": ImageModule.fromarray(np.array(group["image"])),
+                    "style": torch.tensor(np.array(group["style"])),
+                }
+
+            dataset.append(data_dict)
+
+            if max_files and len(dataset) >= max_files:
+                return dataset, map_writer_id
+
+        return dataset, map_writer_id
+
+
+def save_dataset_to_h5(
+    dataset: List[Dict[str, Any]],
+    path: Path,
+    *,
+    latent: bool = False,
+    map_writer_ids: Dict[str, int] = None,
+) -> None:
+    """
+    _summary_
+
+    Parameters
+    ----------
+    dataset : List[Dict[str, Any]]
+        _description_
+    path : Path
+        _description_
+    latent : bool, optional
+        _description_, by default False
+    map_writer_ids : Dict[str, int], optional
+        _description_, by default None
+    """
+
+    with h5py.File(path, mode="w") as f:
+        dataset_h5 = f.create_group("dataset_group")
+
+        for i, data_dict in track(
+            enumerate(dataset), description="Saving dataset for later usage..."
+        ):
+            writer_id = data_dict["writer"]
+            group = dataset_h5.create_group(f"dataset_{i}")
+            group.attrs["writer"] = writer_id
+
+            if latent:
+                group.attrs["writer_map"] = map_writer_ids[writer_id]
+                image_data = data_dict["image"].numpy()
+                group.create_dataset("image", data=image_data)
+                group.create_dataset("label", data=data_dict["label"])
+
+            else:
+                group.attrs["file"] = data_dict["file"]
+                group.attrs["raw_text"] = data_dict["raw_text"]
+
+                group.create_dataset("strokes", data=data_dict["strokes"])
+                group.create_dataset("text", data=data_dict["text"])
+                group.create_dataset("onehot", data=data_dict["onehot"])
+
+                image_data = np.array(data_dict["image"])
+                group.create_dataset("image", data=image_data)
+                group.create_dataset("style", data=data_dict["style"].numpy())
