@@ -7,6 +7,10 @@ from models.Diffusion.attention import AffineTransformLayer
 
 
 class ConvBlock(nn.Module):
+    """
+    _summary_
+    """
+    
     def __init__(
         self,
         in_features: int,
@@ -61,7 +65,7 @@ class ConvBlock(nn.Module):
 
         self.fc = nn.Linear(out_channels, out_channels)
         self.affine_2 = AffineTransformLayer(in_features // 4, out_channels)
-        self.dropout = nn.Dropout(p=drop_rate)
+        self.dropout = nn.Dropout(drop_rate)
 
     def forward(self, x: Tensor, alpha: Tensor) -> Tensor:
         """
@@ -81,14 +85,15 @@ class ConvBlock(nn.Module):
         """
 
         x_skip = self.conv_skip(x)
-        x = self.conv_0(F.silu(x))
+        # TODO: Swish vs SeLU vs ReLU
+        x = self.conv_0(F.selu(x))
         x = self.dropout(self.affine_0(x, alpha))
 
-        x = self.conv_1(F.silu(x))
+        x = self.conv_1(F.selu(x))
         x = self.dropout(self.affine_1(x, alpha))
 
         x = rearrange(x, "b h w -> b w h")
-        x = self.fc(F.silu(x))
+        x = self.fc(F.selu(x))
         x = self.dropout(self.affine_2(x, alpha))
         x = rearrange(x, "b h w -> b w h")
 
@@ -97,6 +102,10 @@ class ConvBlock(nn.Module):
 
 
 class FeedForwardNetwork(nn.Module):
+    """
+    _summary_
+    """
+    
     def __init__(
         self,
         in_features: int,
@@ -105,10 +114,25 @@ class FeedForwardNetwork(nn.Module):
         hidden_size: int = 768,
         act_before: bool = True,
     ) -> None:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        in_features : int
+            _description_
+        out_features : int
+            _description_
+        hidden_size : int, optional
+            _description_, by default 768
+        act_before : bool, optional
+            _description_, by default True
+        """
+        
         super().__init__()
         self.act_before = act_before
 
-        # TODO: Testing SiLU (original implementation) with ReLU and SeLU
+        # TODO: Swish vs SeLU vs ReLU
         ff_network = [
             nn.Linear(in_features, hidden_size),
             nn.SELU(),
@@ -121,4 +145,18 @@ class FeedForwardNetwork(nn.Module):
         self.ff_net = nn.Sequential(*ff_network)
 
     def forward(self, x: Tensor) -> Tensor:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        x : Tensor
+            _description_
+
+        Returns
+        -------
+        Tensor
+            _description_
+        """
+        
         return self.ff_net(x)

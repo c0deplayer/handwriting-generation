@@ -5,6 +5,10 @@ from torch.optim.optimizer import Optimizer
 
 
 class InverseSqrtScheduler(LRScheduler):
+    """
+    _summary_
+    """
+    
     def __init__(
         self,
         optimizer: Optimizer,
@@ -58,6 +62,20 @@ class InverseSqrtScheduler(LRScheduler):
         super().__init__(optimizer, last_epoch, verbose)
 
     def step(self, epoch: int = None) -> float:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        epoch : int, optional
+            _description_, by default None
+
+        Returns
+        -------
+        float
+            _description_
+        """
+        
         if self._step_count == 0:
             self._step_count += 1
             # noinspection PyProtectedMember,PyUnresolvedReferences
@@ -77,10 +95,18 @@ class InverseSqrtScheduler(LRScheduler):
         return self._last_lr
 
     def get_lr(self) -> float:
+        """
+        _summary_
+        """
+        
         for g in self.optimizer.param_groups:
             return g["lr"]
 
     def get_lr_scale(self) -> float:
+        """
+        _summary_
+        """
+        
         return (self.d_model ** (-0.5)) * min(
             self._step_count ** (-0.5),
             self._step_count * self.n_warmup_steps ** (-1.5),
@@ -94,6 +120,21 @@ class InverseSqrtScheduler(LRScheduler):
         lr: float,
         epoch: int = None,
     ) -> None:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        is_verbose : bool
+            _description_
+        group : Dict[str, Any]
+            _description_
+        lr : float
+            _description_
+        epoch : int, optional
+            _description_, by default None
+        """
+        
         if is_verbose:
             if epoch is None:
                 print(f"Learning rate: {group:.4e} --> {lr:.4e}")

@@ -10,18 +10,22 @@ from .utils import reshape_up
 
 
 class StyleExtractor(nn.Module):
-    def __init__(self, device: torch.device) -> None:
+    """
+    Takes a grayscale image (with the last channel) with pixels [0, 255].
+    Rescales to [-1, 1] and repeats along the channel axis for 3 channels.
+    Uses a MobileNetV2 with pretrained model_checkpoints from imagenet as initial model_checkpoints.
+    """
+    
+    def __init__(self, *, device: torch.device) -> None:
         """
-        Takes a grayscale image (with the last channel) with pixels [0, 255].
-        Rescales to [-1, 1] and repeats along the channel axis for 3 channels.
-        Uses a MobileNetV2 with pretrained model_checkpoints from imagenet as initial model_checkpoints.
+        _summary_
 
         Parameters
         ----------
-        device: torch.device
+        device : torch.device
             _description_
         """
-        
+
         super().__init__()
 
         self.device = device
@@ -44,9 +48,10 @@ class StyleExtractor(nn.Module):
         Returns:
             Tensor: _description_
         """
+        
         x = image.clone().detach().to(self.device)
 
-        x = (2 * x / 255) - 1
+        x = x / 127.5 - 1
         x = repeat(x, "1 1 h w -> 1 3 h w")
 
         x = self.mobilenet_v2(x)
@@ -57,6 +62,10 @@ class StyleExtractor(nn.Module):
 
 
 class TextStyleEncoder(nn.Module):
+    """
+    _summary_
+    """
+    
     def __init__(
         self,
         in_features: int,
@@ -80,7 +89,7 @@ class TextStyleEncoder(nn.Module):
 
         super().__init__()
 
-        self.dropout = nn.Dropout(p=0.3)
+        self.dropout = nn.Dropout(0.3)
         self.style_ffn = FeedForwardNetwork(
             in_features, d_model, hidden_size=hidden_size
         )

@@ -8,7 +8,24 @@ from torch import Tensor
 
 
 class PrepareForMultiHeadAttention(nn.Module):
+    """
+    _summary_
+    """
+    
     def __init__(self, d_model: int, heads: int, *, bias: bool = True) -> None:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        d_model : int
+            _description_
+        heads : int
+            _description_
+        bias : bool, optional
+            _description_, by default True
+        """
+        
         super().__init__()
 
         self.d_model = d_model
@@ -17,11 +34,39 @@ class PrepareForMultiHeadAttention(nn.Module):
         self.linear = nn.Linear(d_model, d_model, bias=bias)
 
     def forward(self, x: Tensor) -> Tensor:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        x : Tensor
+            _description_
+
+        Returns
+        -------
+        Tensor
+            _description_
+        """
+        
         x = self.linear(x)
 
         return self.split_heads(x)
 
     def split_heads(self, x: Tensor) -> Tensor:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        x : Tensor
+            _description_
+
+        Returns
+        -------
+        Tensor
+            _description_
+        """
+        
         return rearrange(
             x,
             "b s (h d) -> b h s d",
@@ -32,6 +77,10 @@ class PrepareForMultiHeadAttention(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
+    """
+    _summary_
+    """
+    
     def __init__(
         self,
         d_model: int,
@@ -41,6 +90,23 @@ class MultiHeadAttention(nn.Module):
         bias: bool = True,
         return_weights: bool = True,
     ) -> None:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        d_model : int
+            _description_
+        heads : int
+            _description_
+        dropout : float, optional
+            _description_, by default 0.1
+        bias : bool, optional
+            _description_, by default True
+        return_weights : bool, optional
+            _description_, by default True
+        """
+        
         super().__init__()
 
         self.d_model = d_model
@@ -52,11 +118,31 @@ class MultiHeadAttention(nn.Module):
         self.value = PrepareForMultiHeadAttention(d_model, heads, bias=True)
 
         self.output = nn.Linear(d_model, d_model)
-        self.dropout = nn.Dropout(p=dropout)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(
         self, q: Tensor, k: Tensor, v: Tensor, *, mask: Tensor = None
     ) -> Union[Tuple[Tensor, Tensor], Tensor]:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        q : Tensor
+            _description_
+        k : Tensor
+            _description_
+        v : Tensor
+            _description_
+        mask : Tensor, optional
+            _description_, by default None
+
+        Returns
+        -------
+        Union[Tuple[Tensor, Tensor], Tensor]
+            _description_
+        """
+        
         query = self.query(q)
         key = self.key(k)
         value = self.value(v)
@@ -85,6 +171,26 @@ class MultiHeadAttention(nn.Module):
     def scaled_dot_product_attention(
         q: Tensor, k: Tensor, v: Tensor, *, mask: Tensor = None
     ) -> Tuple[Tensor, Tensor]:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        q : Tensor
+            _description_
+        k : Tensor
+            _description_
+        v : Tensor
+            _description_
+        mask : Tensor, optional
+            _description_, by default None
+
+        Returns
+        -------
+        Tuple[Tensor, Tensor]
+            _description_
+        """
+        
         scores = q @ k.transpose(-2, -1)
         d_k = k.size(1)
         scores /= math.sqrt(d_k)
@@ -98,6 +204,10 @@ class MultiHeadAttention(nn.Module):
 
 
 class AffineTransformLayer(nn.Module):
+    """
+    _summary_
+    """
+    
     def __init__(
         self, in_features: int, out_features: int, channel_first_input: bool = False
     ) -> None:

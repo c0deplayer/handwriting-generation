@@ -15,7 +15,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 
 from data.tokenizer import Tokenizer
-from data.utils import get_image, pad_image
+from data.utils import get_image
 from . import utils
 from .attention import AffineTransformLayer, MultiHeadAttention
 from .cnn import ConvBlock, FeedForwardNetwork
@@ -25,6 +25,10 @@ from .text_style import StyleExtractor, TextStyleEncoder
 
 
 class AttentionBlock(nn.Module):
+    """
+    _summary_
+    """
+    
     def __init__(
         self,
         in_features: int,
@@ -60,7 +64,7 @@ class AttentionBlock(nn.Module):
         self.text_pos = PositionalEncoder(2000, d_model)()
         self.stroke_pos = PositionalEncoder(2000, d_model, pos_factor=pos_factor)()
 
-        self.dense_layer = nn.Linear(in_features=in_features, out_features=d_model)
+        self.dense_layer = nn.Linear(in_features, d_model)
         self.layer_norm = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=False)
         self.affine_0 = AffineTransformLayer(in_features // 12, d_model)
 
@@ -71,7 +75,7 @@ class AttentionBlock(nn.Module):
         self.affine_2 = AffineTransformLayer(in_features // 12, d_model)
 
         self.ff_network = FeedForwardNetwork(d_model, d_model, hidden_size=d_model * 2)
-        self.dropout = nn.Dropout(p=drop_rate)
+        self.dropout = nn.Dropout(drop_rate)
         self.affine_3 = AffineTransformLayer(in_features // 12, d_model)
 
     def forward(
@@ -100,7 +104,8 @@ class AttentionBlock(nn.Module):
             self.text_pos = self.text_pos.to(x.device)
             self.stroke_pos = self.stroke_pos.to(x.device)
 
-        text = self.dense_layer(F.silu(text))
+        # TODO: Swish vs SeLU vs ReLU
+        text = self.dense_layer(F.selu(text))
         text = self.affine_0(self.layer_norm(text), sigma)
         text_pos = text + self.text_pos[:, : text.size(1)]
 
@@ -126,6 +131,10 @@ class AttentionBlock(nn.Module):
 
 
 class DiffusionModel(pl.LightningModule):
+    """
+    _summary_
+    """
+    
     def __init__(
         self,
         num_layers: int = 2,
@@ -156,7 +165,7 @@ class DiffusionModel(pl.LightningModule):
 
         super().__init__()
 
-        self.beta = utils.get_beta_set()
+        self.beta = utils.get_beta_set(device=self.device)
         self.alpha = torch.cumprod(1 - self.beta, dim=0)
 
         self.sigma_ff_network = FeedForwardNetwork(1, c1 // 4, hidden_size=2048)
@@ -229,6 +238,9 @@ class DiffusionModel(pl.LightningModule):
         """
 
         x, text, sigma, style = batch
+        if self.beta.device != x.device:
+            self.beta = self.beta.to(device=x.device)
+            self.alpha = self.alpha.to(device=x.device)
 
         sigma = self.sigma_ff_network(sigma)
         text_mask = utils.create_padding_mask(text)
@@ -373,8 +385,8 @@ class DiffusionModel(pl.LightningModule):
 
         strokes, strokes_pred, pen_lifts, pen_lifts_pred, alphas = loss_batch
 
-        pen_lifts = torch.clamp_(pen_lifts, min=1e-7, max=1 - 1e-7)
-        pen_lifts_pred = rearrange(F.sigmoid(pen_lifts_pred), "b h 1 -> b h")
+        pen_lifts = torch.clamp(pen_lifts, min=1e-7, max=1 - 1e-7)
+        pen_lifts_pred = rearrange(torch.sigmoid(pen_lifts_pred), "b h 1 -> b h")
         strokes_loss = torch.mean(
             torch.sum(torch.square(strokes - strokes_pred), dim=-1)
         )
@@ -389,6 +401,7 @@ class DiffusionModel(pl.LightningModule):
         self,
         sequence: str,
         vocab: str,
+        *,
         style_path: Path = None,
         diffusion_mode: str = "new",
     ) -> None:
@@ -413,38 +426,38 @@ class DiffusionModel(pl.LightningModule):
         """
 
         if style_path is None:
-            asset_dir = os.listdir(
-                "/home/codeplayer/Studia/Inżynierka/Handwriting-Synthesis-Thesis-fr-fr/assets"
-            )
+            asset_dir = os.listdir("assets")
             style_path = Path(
-                "/home/codeplayer/Studia/Inżynierka/Handwriting-Synthesis-Thesis-fr-fr/assets/"
-                f"{asset_dir[np.random.randint(0, len(asset_dir))]}"
+                f"assets/{asset_dir[np.random.randint(0, len(asset_dir))]}"
             )
 
         tokenizer = Tokenizer(vocab)
         style_extractor = StyleExtractor(device=self.device)
-        beta_set = utils.get_beta_set()
+        beta_set = utils.get_beta_set(device=self.device)
         alpha_set = torch.cumprod(1 - beta_set, dim=0)
 
         time_steps = len(sequence) * 16
         time_steps -= (time_steps % 8) + 8
 
-        writer_style = get_image(style_path, width=1400, height=96)
-        writer_style = pad_image(writer_style, width=1400, height=96)
+        writer_style = get_image(style_path, 1400, 96)
         writer_style = rearrange(torch.tensor(writer_style), "h w -> 1 1 h w")
 
         style_vector = style_extractor(writer_style)
         style_vector = rearrange(style_vector, "1 h w -> 1 w h")
 
-        sequence = torch.IntTensor([tokenizer.encode(sequence)])
+        sequence = torch.tensor(
+            [tokenizer.encode(sequence)], dtype=torch.int32, device=self.device
+        )
         batch_size = sequence.size(0)
         beta_len = len(beta_set)
-        strokes = torch.randn((batch_size, time_steps, 2))
+        strokes = torch.randn((batch_size, time_steps, 2), device=self.device)
 
         for i in track(range(beta_len - 1, -1, -1)):
-            alpha = alpha_set[i] * torch.ones((batch_size, 1, 1))
-            beta = beta_set[i] * torch.ones((batch_size, 1, 1))
-            alpha_next = alpha_set[i - 1] if i > 0 else torch.tensor(1.0)
+            alpha = alpha_set[i] * torch.ones((batch_size, 1, 1), device=self.device)
+            beta = beta_set[i] * torch.ones((batch_size, 1, 1), device=self.device)
+            alpha_next = (
+                alpha_set[i - 1] if i > 0 else torch.tensor(1.0, device=self.device)
+            )
             batch = (strokes, sequence, torch.sqrt(alpha), style_vector)
 
             with torch.no_grad():
@@ -459,9 +472,9 @@ class DiffusionModel(pl.LightningModule):
                     strokes, model_out, beta, alpha, alpha_next
                 )
 
-        pen_lifts = rearrange(F.sigmoid(pen_lifts), "h w 1 -> h w")
+        pen_lifts = rearrange(torch.sigmoid(pen_lifts), "h w 1 -> h w")
         strokes = torch.cat([strokes, pen_lifts], dim=-1)
-        save_path = "/home/codeplayer/Studia/Inżynierka/Handwriting-Synthesis-Thesis-fr-fr/handwriting.png"
+        save_path = "handwriting.png"
 
         utils.generate_stroke_image(
             strokes.detach().cpu().numpy(), scale=1.0, save_path=save_path

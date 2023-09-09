@@ -6,6 +6,10 @@ from torch import nn as nn, Tensor
 
 
 class PositionalEncoder(nn.Module):
+    """
+    _summary_
+    """
+    
     def __init__(self, position: int, d_model: int, *, pos_factor: int = 1) -> None:
         """
         _summary_
@@ -31,6 +35,15 @@ class PositionalEncoder(nn.Module):
         )
 
     def forward(self) -> Tensor:
+        """
+        _summary_
+
+        Returns
+        -------
+        Tensor
+            _description_
+        """
+        
         return self.positional_encodings.detach().requires_grad_(False)
 
     def get_positional_encoding(self, position: int, d_model: int) -> Tensor:
@@ -49,6 +62,7 @@ class PositionalEncoder(nn.Module):
         Tensor
             _description_
         """
+        
         position = rearrange(torch.arange(position), "p -> p 1")
         two_i = rearrange(torch.arange(d_model), "p -> 1 p")
 
