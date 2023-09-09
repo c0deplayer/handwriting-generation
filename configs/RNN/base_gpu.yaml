@@ -8,22 +8,22 @@ blacklist: !!python/tuple
   - z01-010b
   - z01-010c
 device: "cuda"
-checkpoint_path: "/home/codeplayer/Studia/Inżynierka/handwriting-generation/model_checkpoints/Diffusion"
+checkpoint_path: "/home/codeplayer/Studia/Inżynierka/handwriting-generation/model_checkpoints/RNN"
 data_path: "/home/codeplayer/Studia/Inżynierka/handwriting-generation/raw_data/IAMonDB"
 dataset_txt: "/home/codeplayer/Studia/Inżynierka/handwriting-generation/raw_data/IAMonDB/dataset.txt"
 
-batch_size: 32
+batch_size: 64
 max_files: 0
-max_seq_len: 480
+max_seq_len: 560
 max_text_len: 50
 train_size: 0.85
-vocab: "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ."
+vocab: "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-max_epochs: 300
+max_epochs: 120
 input_size: 3
 hidden_size: 400
 num_mixture: 20
 num_window: 10
 lstm_clip: 10.0
 mdn_clip: 100.0
-bias: 0.0
+bias: 1.0

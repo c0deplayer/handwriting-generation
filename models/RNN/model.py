@@ -9,12 +9,18 @@ from torch import Tensor
 from torch.optim import Optimizer
 
 from data.tokenizer import Tokenizer
+from models.Diffusion.utils import generate_stroke_image
 from . import utils
+from .lstm import LSTM
 from .network import MixtureDensityNetwork
 from .window import GaussianWindow
 
 
 class RNNModel(pl.LightningModule):
+    """
+    _summary_
+    """
+    
     def __init__(
         self,
         input_size: int,
@@ -23,7 +29,7 @@ class RNNModel(pl.LightningModule):
         num_mixture: int = 20,
         vocab_size: int = 73,
         bias: float = None,
-        clip_grads: Tuple[float, float] = None,
+        clip_grads: Tuple[float, float] = (None, None),
     ) -> None:
         """
         _summary_
@@ -43,7 +49,7 @@ class RNNModel(pl.LightningModule):
         bias : float, optional
             _description_, by default None
         clip_grads : Tuple[float, float], optional
-            _description_, by default None
+            _description_, by default (None, None)
         """
 
         super().__init__()
@@ -55,80 +61,163 @@ class RNNModel(pl.LightningModule):
         self.bias = bias
         self.lstm_clip, self.mdn_clip = clip_grads
 
-        self.lstm_0 = nn.LSTM(
+        self.lstm_0 = LSTM(
             input_size=input_size + vocab_size,
             hidden_size=hidden_size,
             batch_first=True,
+            layer_norm=True,
         )
+
         self.window = GaussianWindow(in_features=hidden_size, out_features=num_window)
 
-        self.lstm_1 = nn.LSTM(
+        self.lstm_1 = LSTM(
             input_size=(input_size + hidden_size + vocab_size),
             hidden_size=hidden_size,
             batch_first=True,
+            layer_norm=True,
         )
 
-        self.lstm_2 = nn.LSTM(
+        self.lstm_2 = LSTM(
             input_size=(input_size + hidden_size + vocab_size),
             hidden_size=hidden_size,
             batch_first=True,
+            layer_norm=True,
         )
 
         self.mdn = MixtureDensityNetwork(
             in_features=hidden_size * 3, out_features=num_mixture, bias=bias
         )
 
-        if clip_grads[0] is not None and clip_grads[1] is not None:
-            self.__register_layers_hook()
+        self.lstm_0.apply(self.__init_weights__)
+        self.lstm_1.apply(self.__init_weights__)
+        self.lstm_2.apply(self.__init_weights__)
+        self.window.apply(self.__init_weights__)
+        self.mdn.apply(self.__init_weights__)
 
         self.save_hyperparameters()
 
-    def __register_layers_hook(self) -> None:
-        lstm_tuple = (self.lstm_0, self.lstm_1, self.lstm_2)
-        for lstm in lstm_tuple:
-            for p in track(lstm.parameters(), description="Registering LSTM hook..."):
-                p.register_hook(
-                    lambda grad: torch.clamp(grad, -self.lstm_clip, self.lstm_clip)
-                )
+    def on_before_optimizer_step(self, optimizer: Optimizer) -> None:
+        """
+        _summary_
 
-        for p in track(self.mdn.parameters(), description="Registering MDN hook..."):
-            p.register_hook(
-                lambda grad: torch.clamp(grad, -self.mdn_clip, self.mdn_clip)
-            )
+        Parameters
+        ----------
+        optimizer : Optimizer
+            _description_
+        """
+        
+        if self.lstm_clip is not None:
+            lstm_tuple = (self.lstm_0, self.lstm_1, self.lstm_2)
+            for lstm in lstm_tuple:
+                nn.utils.clip_grad_value_(lstm.parameters(), self.lstm_clip)
+
+        if self.mdn_clip is not None:
+            nn.utils.clip_grad_value_(self.mdn.parameters(), self.mdn_clip)
+
+    # noinspection PyProtectedMember
+    @staticmethod
+    def __init_weights__(model: nn.Module) -> None:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        model : nn.Module
+            _description_
+        """
+        
+        class_name = model.__class__.__name__
+
+        if (
+            class_name.find("LSTM") != -1
+            or class_name.find("MixtureDensityNetwork") != -1
+            or class_name.find("GaussianWindow") != -1
+        ):
+            for name, param in model.named_parameters():
+                if "weight" in name:
+                    utils.truncated_normal_(param.data, mean=0.0, std=0.075)
 
     def forward(
-        self, batch: Tuple[Tensor, Tensor], *, states: Tuple[Tensor, ...] = None
-    ) -> Tuple[Tuple[Tensor, ...], Tensor, Tuple[Tensor, ...]]:
+        self,
+        batch: Tuple[Tensor, Tensor],
+        *,
+        states: Tuple[Tensor, Tensor, Tensor] = None,
+        kw: Tuple[Tensor, Tensor] = (None, None),
+        return_all: bool = False,
+    ) -> Union[
+        Tuple[
+            Tuple[Tensor, ...],
+            Tuple[Tensor, Tensor, Tensor],
+            Tuple[Tensor, Tensor, Tensor],
+        ],
+        Tuple[Tensor, ...],
+    ]:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        batch : Tuple[Tensor, Tensor]
+            _description_
+        states : Tuple[Tensor, Tensor, Tensor], optional
+            _description_, by default None
+        kw : Tuple[Tensor, Tensor], optional
+            _description_, by default (None, None)
+        return_all : bool, optional
+            _description_, by default False
+
+        Returns
+        -------
+        Union[Tuple[ 
+            Tuple[Tensor, ...], 
+            Tuple[Tensor, Tensor, Tensor], 
+            Tuple[Tensor, Tensor, Tensor], 
+        ], 
+        Tuple[Tensor, ...], ]
+            _description_
+        """
+        
         strokes, text = batch
-        batch_size, steps, _ = strokes.size()
+        kappa, window = kw
+        batch_size = strokes.size(0)
 
         hidden_1, hidden_2, hidden_3 = (
             states
             if states is not None
             else utils.get_initial_states(
-                batch_size, self.hidden_size, device=self.device
+                1, batch_size, self.hidden_size, device=self.device
             )
         )
 
-        window_s = torch.zeros(
-            batch_size,
-            1,
-            self.vocab_size,
-            device=self.device,
+        window_s = (
+            window
+            if window is not None
+            else torch.zeros(
+                batch_size,
+                1,
+                self.vocab_size,
+                device=self.device,
+            )
         )
-        kappa = torch.zeros(
-            batch_size,
-            self.num_window,
-            dtype=torch.float32,
-            device=self.device,
+
+        kappa = (
+            kappa
+            if kappa is not None
+            else torch.zeros(
+                batch_size,
+                self.num_window,
+                dtype=torch.float32,
+                device=self.device,
+            )
         )
 
         out_1, window = [], []
 
-        for s in range(steps):
-            strokes_s = strokes[:, s : s + 1, :]
-            strokes_window = torch.cat([strokes_s, window_s], dim=-1)
-            out_s, hidden_1 = self.lstm_0(strokes_window, hidden_1)
+        for stroke in strokes.unbind(1):
+            stroke = rearrange(stroke, "b v -> b 1 v")
+            stroke_window = torch.cat([stroke, window_s], dim=-1)
+
+            out_s, hidden_1 = self.lstm_0(stroke_window, hidden_1)
             phi, kappa, window_s = self.window(out_s, text, kappa)
 
             out_1.append(out_s)
@@ -144,45 +233,46 @@ class RNNModel(pl.LightningModule):
         out_3, hidden_3 = self.lstm_2(inputs, hidden_3)
 
         inputs = torch.cat([out_1, out_2, out_3], dim=-1)
-        pi, mu, sd, rho, eos = self.mdn(inputs)
+        pi, mu, sigma, rho, eos = self.mdn(inputs)
 
-        # noinspection PyUnboundLocalVariable
-        return (
-            (pi, mu, sd, rho, eos),
-            phi,
-            (hidden_1, hidden_2, hidden_3),
-        )
+        if return_all:
+            # noinspection PyUnboundLocalVariable
+            return (
+                (pi, mu, sigma, rho, eos),
+                (phi, kappa, window),
+                (hidden_1, hidden_2, hidden_3),
+            )
+        else:
+            return pi, mu, sigma, rho, eos
 
     def training_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Tensor:
-        batch, strokes = utils.add_prefix(batch)
+        y_hat = self(batch)
 
-        y_hat, _, _ = self(batch)
-
-        loss = self.loss((y_hat, strokes))
+        loss = self.loss((y_hat, batch[0]))
 
         self.log("loss", loss, on_step=True, on_epoch=True, prog_bar=True)
 
         return loss
 
     def validation_step(self, batch: Tuple[Tensor, Tensor], batch_idx: int) -> Tensor:
-        batch, strokes = utils.add_prefix(batch)
-
         with torch.no_grad():
-            y_hat, _, _ = self(batch)
+            y_hat = self(batch)
 
-        loss = self.loss((y_hat, strokes))
+        loss = self.loss((y_hat, batch[0]))
 
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
 
         return loss
 
     def configure_optimizers(self) -> Dict[str, Optimizer]:
-        optimizer = torch.optim.Adam(self.parameters(), lr=8e-4, weight_decay=1e-4)
+        optimizer = torch.optim.Adam(
+            self.parameters(), lr=1e-4, betas=(0.9, 0.95), weight_decay=1e-6
+        )
 
         return {"optimizer": optimizer}
 
     @staticmethod
-    def loss(batch: Tuple[Tensor, ...], *, eps: float = 1e-8) -> Tensor:
+    def loss(batch: Tuple[Tensor, Tensor], *, eps: float = 1e-8) -> Tensor:
         """
         _summary_
 
@@ -201,7 +291,7 @@ class RNNModel(pl.LightningModule):
 
         y_hat, strokes = batch
         pi, mu, sigma, rho, eos_hat = y_hat
-        batch_size = strokes.size(0)
+        batch_size, time_steps, _ = strokes.size()
 
         num_components = pi.size(-1)
         mu_1 = mu[:, :, :num_components]
@@ -222,13 +312,12 @@ class RNNModel(pl.LightningModule):
         eos_hat = eos_hat[:, 0]
         x, y, eos = strokes[:, 0], strokes[:, 1], strokes[:, 2]
 
-        # x = rearrange(x, "v -> v 1").repeat(1, num_components)
         x = repeat(x, "v -> v new_axis", new_axis=num_components)
         y = repeat(y, "v -> v new_axis", new_axis=num_components)
 
         mixtures = (mu_1, mu_2, sigma_1, sigma_2, rho)
 
-        densities = utils.bivariate_gaussian(x, y, mixtures) + eps**2
+        densities = utils.bi_variate_gaussian(x, y, mixtures) + eps**2
         mixture_densities = torch.sum(torch.multiply(densities, pi), dim=1)
         # noinspection PyTypeChecker
         density = -torch.log(mixture_densities + eps)
@@ -237,50 +326,46 @@ class RNNModel(pl.LightningModule):
             eos * eos_hat + (1.0 - eos) * (1.0 - eos_hat) + eps
         )
 
-        return torch.sum(density + binary_log_likelihood) / batch_size
+        return torch.sum(density + binary_log_likelihood) / (batch_size * time_steps)
 
     def generate(
         self,
         raw_text: Union[str, Tensor],
         *,
         vocab: str,
-        states: Tuple[Tensor, ...] = None,
-        steps: int = 700,
-        color: str = "black",
+        states: Tuple[Tensor, Tensor, Tensor] = None,
+        kw: Tuple[Tensor, Tensor] = (None, None),
+        n_steps: int = 700,
         primed: bool = False,
         stochastic: bool = True,
-    ) -> Tensor:
+    ) -> None:
         """
         _summary_
 
         Parameters
         ----------
-        raw_text : str | Tensor
+        raw_text : Union[str, Tensor]
             _description_
         vocab : str
             _description_
-        states : Tuple[Tensor, ...], optional
+        states : Tuple[Tensor, Tensor, Tensor], optional
             _description_, by default None
-        steps : int, optional
+        kw : Tuple[Tensor, Tensor], optional
+            _description_, by default (None, None)
+        n_steps : int, optional
             _description_, by default 700
-        color : str, optional
-            _description_, by default "black"
         primed : bool, optional
             _description_, by default False
         stochastic : bool, optional
             _description_, by default True
-
-        Returns
-        -------
-        Tensor
-            _description_
         """
-
+        
         if not primed:
             tokenizer = Tokenizer(vocab)
             eye = torch.eye(tokenizer.get_vocab_size(), device=self.device)
             indices = tokenizer.encode(raw_text)
             text = eye[indices]
+            text = rearrange(text, "o h -> 1 o h")
         else:
             # noinspection PyUnresolvedReferences
             text = raw_text.copy()
@@ -288,41 +373,42 @@ class RNNModel(pl.LightningModule):
         strokes = torch.zeros((1, 1, 3), device=self.device)
         outputs = []
 
-        for _ in range(steps):
+        for _ in track(range(n_steps)):
             batch = (strokes, text)
-            pi, mu, sigma, rho, eos, phi = self(batch, states=states)
+            mixtures, pkw, states = self(batch, states=states, kw=kw, return_all=True)
+            pi, mu, sigma, rho, eos = mixtures
+            phi, kw = pkw[0], pkw[1:]
 
-            pi, mu, sigma, rho, eos = (
-                pi[0, 0],
-                mu[0, 0],
-                sigma[0, 0],
-                rho[0, 0],
-                eos[0, 0],
+            pi, mu, sigma, rho, eos, phi = (
+                pi.squeeze(),
+                mu.squeeze(),
+                sigma.squeeze(),
+                rho.squeeze(),
+                eos.squeeze(),
+                phi.squeeze(),
             )
+
             mixtures = (pi, mu, sigma, rho, eos)
 
             strokes_tmp = utils.get_mean_predictions(mixtures, stochastic=stochastic)
-            is_last_phi_high = phi[0, 0, text.size(1) - 1] > 0.8
+            is_last_phi_high = phi[text.size(1) - 1] > 0.8
             is_eos = strokes_tmp[0, 2] > 0.5
 
-            if is_last_phi_high or (phi[0, 0].argmax() == text.size(1) - 1 and is_eos):
+            if is_last_phi_high or (phi.argmax() == text.size(1) - 1 and is_eos):
                 strokes_tmp[0, 2] = 1.0
                 outputs.append(strokes_tmp)
                 break
 
             outputs.append(strokes_tmp)
-            strokes = rearrange(strokes_tmp, "x y eos -> 1 x y eos")
+            strokes = rearrange(strokes_tmp, "1 v -> 1 1 v")
 
         strokes = torch.cat(outputs, dim=0)
-        save_path = (
-            "/home/codeplayer/Studia/Inżynierka/handwriting-generation/handwriting.png"
-        )
+        save_path = "handwriting.png"
 
         generate_stroke_image(
             strokes.detach().cpu().numpy(), scale=1.0, save_path=save_path
         )
 
-    # TODO: Complete, Check and Test (CCT)
     def generate_primed(
         self,
         primed_strokes: Tensor,
@@ -330,9 +416,8 @@ class RNNModel(pl.LightningModule):
         text: str,
         vocab: str,
         *,
-        color: str = "black",
         steps: int = 700,
-    ) -> Tensor:
+    ) -> None:
         """
         _summary_
 
@@ -346,8 +431,6 @@ class RNNModel(pl.LightningModule):
             _description_
         vocab : str
             _description_
-        color : str, optional
-            _description_, by default "black"
         steps : int, optional
             _description_, by default 700
 
@@ -366,24 +449,27 @@ class RNNModel(pl.LightningModule):
         text = eye[indices]
 
         text_cat = torch.cat([text_priming, text], dim=1)
-        primed_strokes, _ = utils.add_prefix(
-            (rearrange(primed_strokes, "h w -> 1 h w"), text_cat),
-            return_batch=False,
-        )
-        priming_steps = primed_strokes.size(1)
 
-        for step in range(priming_steps):
-            # x_strokes = primed_strokes[:, step].unsqueeze(1)
-            x_strokes = rearrange(primed_strokes[:, step], "1 h -> 1 1 h")
+        primed_strokes = rearrange(primed_strokes, "h w -> 1 h w")
+        batch_size, priming_steps, input_len = primed_strokes.size()
+
+        prefix = torch.zeros([batch_size, 1, input_len], device=self.device)
+        prefix[:, :, 2] = 1.0
+        primed_strokes = torch.cat([prefix, primed_strokes[:, :-1]], dim=1)
+
+        states, kw = None, (None, None)
+        for _ in priming_steps.unbind(1):
+            x_strokes = rearrange(primed_strokes, "1 h -> 1 1 h")
             batch = (x_strokes, text_cat)
-            _, _, states = self(batch)
+            _, pkw, states = self(batch, states=states, kw=kw, return_all=True)
+            kw = pkw[1:]
 
         # noinspection PyUnboundLocalVariable
-        return self.generate(
+        self.generate(
             text_cat,
             vocab=vocab,
             states=states,
-            steps=steps,
-            color=color,
+            kw=kw,
+            n_steps=steps,
             stochastic=True,
         )

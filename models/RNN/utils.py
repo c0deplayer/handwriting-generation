@@ -1,5 +1,4 @@
-import copy
-from typing import Tuple, Union
+from typing import Tuple
 
 import torch
 from einops import rearrange
@@ -41,40 +40,9 @@ def reshape_down(batch: Tensor, ground_true: Tensor = None) -> Tensor:
     )
 
 
-def add_prefix(
-    batch: Tuple[Tensor, Union[Tensor, None]],
-    *,
-    return_batch: bool = True,
-) -> Tuple[Union[Tuple[Tensor, Tensor], Tensor], Tensor]:
-    """
-    _summary_
-
-    Parameters
-    ----------
-    batch : Tuple[Tensor, Tensor | None]
-        _description_
-    return_batch : bool, optional
-        _description_, by default True
-
-    Returns
-    -------
-    Tuple[Tuple[Tensor, Tensor] | Tensor, Tensor]:
-        _description_
-    """
-
-    strokes, text = batch
-    strokes_copy = copy.deepcopy(strokes)
-    batch_size, _, input_len = strokes.size()
-
-    prefix = torch.zeros([batch_size, 1, input_len], device=strokes.device)
-    strokes = torch.cat([prefix, strokes[:, :-1]], dim=1)
-
-    return ((strokes, text), strokes_copy) if return_batch else (strokes, strokes_copy)
-
-
 def get_initial_states(
-    batch_size: int, hidden_size: int, *, device: torch.device
-) -> Tuple[Tuple[Tensor, Tensor], ...]:
+    n_layers: int, batch_size: int, hidden_size: int, *, device: torch.device
+) -> Tuple[Tuple[Tensor, Tensor], Tuple[Tensor, Tensor], Tuple[Tensor, Tensor]]:
     """
     _summary_
 
@@ -83,6 +51,8 @@ def get_initial_states(
     batch_size : int
         _description_
     hidden_size : int
+        _description_
+    n_layers : int
         _description_
     device : torch.device
         _description_
@@ -93,10 +63,10 @@ def get_initial_states(
         _description_
     """
 
-    h_0 = torch.zeros(1, batch_size, hidden_size, device=device)
-    c_0 = torch.zeros_like(h_0, device=device)
+    h = torch.zeros(n_layers, batch_size, hidden_size, device=device)
+    c = torch.zeros_like(h, device=device)
 
-    return (h_0, c_0), (h_0, c_0), (h_0, c_0)
+    return (h, c), (h, c), (h, c)
 
 
 def get_mean_predictions(mixtures: Tuple[Tensor, ...], *, stochastic: bool) -> Tensor:
@@ -116,8 +86,8 @@ def get_mean_predictions(mixtures: Tuple[Tensor, ...], *, stochastic: bool) -> T
         _description_
     """
 
-    pi, mu, sigma, rho, eos = mixtures
-    num_components = pi.size(-1)
+    pi, mu, sigma, rho, eos_flag = mixtures
+    num_components = len(pi)
 
     component = torch.multinomial(pi, 1).item() if stochastic else pi.cpu().argmax()
 
@@ -143,12 +113,12 @@ def get_mean_predictions(mixtures: Tuple[Tensor, ...], *, stochastic: bool) -> T
 
         x, y = value[0].item(), value[1].item()
 
-    eos_flag = 1 if eos > 0.5 else 0
+    out = torch.tensor([x, y, eos_flag], device=pi.device)
 
-    return torch.tensor([x, y, eos_flag], device=pi.device)
+    return rearrange(out, "v -> 1 v")
 
 
-def bivariate_gaussian(
+def bi_variate_gaussian(
     x: Tensor, y: Tensor, mixtures: Tuple[Tensor, ...], *, eps: float = 1e-16
 ) -> Tensor:
     """
@@ -185,3 +155,33 @@ def bivariate_gaussian(
 
     # noinspection PyTypeChecker
     return exp / denominator
+
+
+# * https://discuss.pytorch.org/t/implementing-truncated-normal-initializer/4778/20 *
+def truncated_normal_(tensor: Tensor, *, mean: float = 0.0, std: float = 1.0) -> Tensor:
+    """
+    _summary_
+
+    Parameters
+    ----------
+    tensor : Tensor
+        _description_
+    mean : float, optional
+        _description_, by default 0.0
+    std : float, optional
+        _description_, by default 1.0
+
+    Returns
+    -------
+    Tensor
+        _description_
+    """
+    
+    size = tensor.shape
+    tmp = tensor.new_empty(size + (4,)).normal_()
+    valid = (tmp < 2) & (tmp > -2)
+    ind = valid.max(-1, keepdim=True)[1]
+    tensor.data.copy_(tmp.gather(-1, ind).squeeze(-1))
+    tensor.data.mul_(std).add_(mean)
+
+    return tensor

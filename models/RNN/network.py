@@ -6,6 +6,10 @@ from torch import Tensor
 
 
 class MixtureDensityNetwork(nn.Module):
+    """
+    _summary_
+    """
+    
     def __init__(
         self, in_features: int, out_features: int, *, bias: float = None
     ) -> None:
@@ -50,9 +54,9 @@ class MixtureDensityNetwork(nn.Module):
         pi_hat, sigma_hat = self.pi(x), self.sigma(x)
 
         pi = torch.softmax(pi_hat * (1 + self.bias), dim=-1)
-        sigma = torch.exp(sigma_hat - self.bias)
+        sigma = torch.clamp_min(torch.exp(sigma_hat - self.bias), 1e-4 - 1.0)
         mu = self.mu(x)
-        rho = torch.tanh(self.rho(x))
+        rho = torch.tanh(torch.clamp(self.rho(x), min=-1, max=1))
         eos = torch.sigmoid(self.eos(x))
 
         return pi, mu, sigma, rho, eos

@@ -2,11 +2,15 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
-from einops import reduce, repeat
+from einops import reduce, repeat, rearrange
 from torch import Tensor
 
 
 class GaussianWindow(nn.Module):
+    """
+    _summary_
+    """
+    
     def __init__(self, in_features: int, out_features: int) -> None:
         """
         _summary_
@@ -47,7 +51,7 @@ class GaussianWindow(nn.Module):
         """
 
         num_chars = text.size(1)
-        x = x[:, 0]
+        x = rearrange(x, "b 1 v -> b v")
 
         alpha = torch.exp(self.alpha(x))
         beta = torch.exp(self.beta(x))
@@ -56,10 +60,10 @@ class GaussianWindow(nn.Module):
         alpha = repeat(alpha, "h w -> h w new_axis", new_axis=num_chars)
         beta = repeat(beta, "h w -> h w new_axis", new_axis=num_chars)
         kappa = repeat(new_kappa, "h w -> h w new_axis", new_axis=num_chars)
-        u = torch.arange(num_chars, device=x.device)
+        u = torch.linspace(0, end=num_chars - 1, steps=num_chars, device=x.device)
 
         densities = alpha * torch.exp(-beta * (kappa - u) ** 2)
         phi = reduce(densities, "b h w -> b () w", "sum")
-        window = phi @ text
+        window = torch.bmm(phi, text)
 
         return phi, new_kappa, window
