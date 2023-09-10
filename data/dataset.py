@@ -359,6 +359,10 @@ class IAMDataset(Dataset):
             parts = line.split(" ")
             writer_id, image_id = parts[0].split(",")[0], parts[0].split(",")[1]
             label = parts[1].rstrip()
+
+            if len(label) > self.max_text_len:
+                continue
+
             image_parts = image_id.split("-")
             f_folder, s_folder = (
                 image_parts[0],
@@ -370,22 +374,20 @@ class IAMDataset(Dataset):
             image, _ = utils.get_image(
                 img_path, self.img_width, self.img_height, latent=True
             )
+
             if image is None:
                 continue
 
             if self.transforms is not None:
                 image = self.transforms(image)
 
-            label, _ = utils.get_onehot_encoding(
+            _, label = utils.get_encoded_text_with_one_hot_encoding(
                 label, self.tokenizer, self.max_text_len
             )
 
-            if label is None:
-                continue
-
             dataset.append({"writer": writer_id, "image": image, "label": label})
 
-            if writer_id not in self.__map_writer_id.keys():
+            if writer_id not in map_writer_id.keys():
                 map_writer_id[writer_id] = len(map_writer_id)
 
             if self.max_files and len(dataset) >= self.max_files:
