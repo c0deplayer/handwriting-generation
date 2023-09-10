@@ -392,7 +392,7 @@ def load_dataset_from_h5(
                     "raw_text": group.attrs["raw_text"],
                     "strokes": np.array(group["strokes"]),
                     "text": np.array(group["text"]),
-                    "onehot": np.array(group["one_hot"]),
+                    "one_hot": np.array(group["one_hot"]),
                     "image": ImageModule.fromarray(np.array(group["image"])),
                     "style": torch.tensor(np.array(group["style"])),
                 }
