@@ -26,8 +26,8 @@ class CrossAttention(nn.Module):
             d_cond = d_model
 
         self.to_q = nn.Linear(d_model, d_head * n_heads, bias=False)
-        self.to_q = nn.Linear(d_cond, d_head * n_heads, bias=False)
-        self.to_q = nn.Linear(d_cond, d_head * n_heads, bias=False)
+        self.to_k = nn.Linear(d_cond, d_head * n_heads, bias=False)
+        self.to_v = nn.Linear(d_cond, d_head * n_heads, bias=False)
         self.to_out = nn.Sequential(
             nn.Linear(d_head * n_heads, d_model), nn.Dropout(dropout)
         )
@@ -49,8 +49,8 @@ class CrossAttention(nn.Module):
             context = x
 
         q = self.to_q(x)
-        k = self.to_q(context)
-        v = self.to_q(context)
+        k = self.to_k(context)
+        v = self.to_v(context)
 
         if (
             self.use_flash_attention
@@ -116,14 +116,14 @@ class WordAttention(nn.Module):
     def __init__(self, in_features: int, hidden_size: int) -> None:
         super().__init__()
 
-        self.q = nn.Linear(in_features, hidden_size)
-        self.k = nn.Linear(in_features, hidden_size)
-        self.v = nn.Linear(in_features, hidden_size)
+        self.to_q = nn.Linear(in_features, hidden_size)
+        self.to_k = nn.Linear(in_features, hidden_size)
+        self.to_v = nn.Linear(in_features, hidden_size)
 
     def forward(self, x: Tensor) -> Tensor:
-        q = self.q(x)
-        k = self.k(x)
-        v = self.v(x)
+        q = self.to_q(x)
+        k = self.to_k(x)
+        v = self.to_v(x)
 
         scores = q @ k.transpose(-2, -1)
         scores = F.softmax(scores, dim=-1)
