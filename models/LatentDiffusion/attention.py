@@ -1,5 +1,4 @@
 import torch
-import torch.nn.functional as F
 from einops import einsum, rearrange
 from torch import Tensor, nn
 
@@ -103,7 +102,7 @@ class CrossAttention(nn.Module):
             mask = rearrange(mask, "b j -> b 1 1 j")
             attention.masked_fill_(~mask, -10000.0)
 
-        attention = F.softmax(attention, dim=-1)
+        attention = torch.softmax(attention, dim=-1)
 
         # noinspection PyTypeChecker
         out = einsum(attention, v, "b i j, b j d -> b i d")
@@ -126,6 +125,6 @@ class WordAttention(nn.Module):
         v = self.to_v(x)
 
         scores = q @ k.transpose(-2, -1)
-        scores = F.softmax(scores, dim=-1)
+        scores = torch.softmax(scores, dim=-1)
 
         return scores @ v

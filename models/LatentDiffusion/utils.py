@@ -63,9 +63,7 @@ def __crop_whitespaces(image: Image) -> Image:
 
     cords = cv2.findNonZero(threshold)
     x, y, w, h = cv2.boundingRect(cords)
-    rect = image.crop((x, y, x + w, y + h))
-
-    return image
+    return image.crop((x, y, x + w, y + h))
 
 
 def save_image(image: Tensor, path: Path) -> None:
