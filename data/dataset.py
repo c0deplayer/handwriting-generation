@@ -198,7 +198,7 @@ class IAMonDataset(Dataset):
         List[Dict[str, Any]]
             _description_
         """
-        
+
         dataset = []
         raw_data_path = Path(self.config.data_path)
         ascii_path = raw_data_path / "ascii"
@@ -228,7 +228,7 @@ class IAMonDataset(Dataset):
 
                 strokes = utils.get_line_strokes(path_file_xml, self.max_seq_len)
 
-                onehot, text = utils.get_onehot_encoding(
+                one_hot, text = utils.get_encoded_text_with_one_hot_encoding(
                     raw_text, self.tokenizer, self.max_text_len
                 )
 
@@ -255,7 +255,7 @@ class IAMonDataset(Dataset):
                         "raw_text": raw_text,
                         "strokes": strokes,
                         "text": text,
-                        "onehot": onehot,
+                        "one_hot": one_hot,
                         "image": image,
                         "style": style,
                     }
@@ -277,14 +277,14 @@ class IAMonDataset(Dataset):
     def __getitem__(self, index: int) -> Tuple[Tensor, ...]:
         if self.diffusion:
             strokes = torch.tensor(self.dataset[index]["strokes"], dtype=torch.float32)
-            text = torch.tensor(self.dataset[index]["text"], dtype=torch.int32)
+            text = torch.tensor(self.dataset[index]["text"])
             style = self.dataset[index]["style"]
 
             return strokes, text, style
 
         else:
             strokes = torch.tensor(self.dataset[index]["strokes"], dtype=torch.float32)
-            text = torch.tensor(self.dataset[index]["onehot"], dtype=torch.float32)
+            text = torch.tensor(self.dataset[index]["one_hot"], dtype=torch.float32)
 
             return strokes, text
 
@@ -348,7 +348,7 @@ class IAMDataset(Dataset):
         Tuple[List[Dict[str, Any]], Dict[str, int]]
             _description_
         """
-        
+
         dataset, map_writer_id = [], {}
         raw_data_path = Path(self.config.data_path)
 

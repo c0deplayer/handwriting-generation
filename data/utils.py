@@ -6,6 +6,7 @@ import PIL
 import h5py
 import numpy as np
 import torch
+import torch.nn.functional as F
 from PIL import Image as ImageModule, ImageOps
 from PIL.Image import Image
 from rich.progress import track
@@ -190,7 +191,7 @@ def get_image(
     return __pad_image(img, width, height)
 
 
-def get_onehot_encoding(
+def get_encoded_text_with_one_hot_encoding(
     text: str, tokenizer: Tokenizer, max_len: int, *, pad_value: int = 0
 ) -> Tuple[np.array, np.array]:
     """
@@ -213,7 +214,6 @@ def get_onehot_encoding(
         _description_
     """
 
-    eye = torch.eye(tokenizer.get_vocab_size())
     text = tokenizer.encode(text)
 
     text_len = len(text)
@@ -224,7 +224,10 @@ def get_onehot_encoding(
         # noinspection PyTypeChecker
         text = np.concatenate((text, padded_text))
 
-    return eye[text].numpy(), text
+    labels = torch.as_tensor(text)
+    one_hot = F.one_hot(labels, num_classes=tokenizer.get_vocab_size())
+
+    return one_hot.numpy(), text
 
 
 def __remove_whitespaces(img: np.array, *, threshold: int) -> np.array:
@@ -389,7 +392,7 @@ def load_dataset_from_h5(
                     "raw_text": group.attrs["raw_text"],
                     "strokes": np.array(group["strokes"]),
                     "text": np.array(group["text"]),
-                    "onehot": np.array(group["onehot"]),
+                    "onehot": np.array(group["one_hot"]),
                     "image": ImageModule.fromarray(np.array(group["image"])),
                     "style": torch.tensor(np.array(group["style"])),
                 }
@@ -446,7 +449,7 @@ def save_dataset_to_h5(
 
                 group.create_dataset("strokes", data=data_dict["strokes"])
                 group.create_dataset("text", data=data_dict["text"])
-                group.create_dataset("onehot", data=data_dict["onehot"])
+                group.create_dataset("one_hot", data=data_dict["one_hot"])
 
                 image_data = np.array(data_dict["image"])
                 group.create_dataset("image", data=image_data)
