@@ -17,7 +17,7 @@ max_files: 0
 max_seq_len: 560
 max_text_len: 50
 train_size: 0.85
-vocab: "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+vocab: " _abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 max_epochs: 120
 input_size: 3
