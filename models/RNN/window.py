@@ -2,7 +2,7 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
-from einops import reduce, repeat, rearrange
+from einops import reduce, rearrange
 from torch import Tensor
 
 
@@ -10,7 +10,7 @@ class GaussianWindow(nn.Module):
     """
     _summary_
     """
-    
+
     def __init__(self, in_features: int, out_features: int) -> None:
         """
         _summary_
@@ -25,9 +25,7 @@ class GaussianWindow(nn.Module):
 
         super().__init__()
 
-        self.alpha = nn.Linear(in_features, out_features)
-        self.beta = nn.Linear(in_features, out_features)
-        self.kappa = nn.Linear(in_features, out_features)
+        self.abk = nn.Linear(in_features, out_features * 3)
 
     def forward(
         self, x: Tensor, text: Tensor, prev_kappa: Tensor
@@ -53,17 +51,17 @@ class GaussianWindow(nn.Module):
         num_chars = text.size(1)
         x = rearrange(x, "b 1 v -> b v")
 
-        alpha = torch.exp(self.alpha(x))
-        beta = torch.exp(self.beta(x))
-        new_kappa = prev_kappa + torch.exp(self.kappa(x))
+        abk = torch.exp(self.abk(x))
+        alpha, beta, kappa = abk.chunk(3, dim=-1)
+        new_kappa = prev_kappa + kappa
 
-        alpha = repeat(alpha, "h w -> h w new_axis", new_axis=num_chars)
-        beta = repeat(beta, "h w -> h w new_axis", new_axis=num_chars)
-        kappa = repeat(new_kappa, "h w -> h w new_axis", new_axis=num_chars)
+        alpha = rearrange(alpha, "h w -> h w 1")
+        beta = rearrange(beta, "h w -> h w 1")
+        kappa = rearrange(new_kappa, "h w -> h w 1")
         u = torch.linspace(0, end=num_chars - 1, steps=num_chars, device=x.device)
 
         densities = alpha * torch.exp(-beta * (kappa - u) ** 2)
         phi = reduce(densities, "b h w -> b () w", "sum")
-        window = torch.bmm(phi, text)
+        window = phi @ text
 
         return phi, new_kappa, window
