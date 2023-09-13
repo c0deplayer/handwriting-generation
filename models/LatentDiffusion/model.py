@@ -177,7 +177,7 @@ class LatentDiffusionModel(pl.LightningModule):
     """
     _summary_
     """
-    
+
     def __init__(
         self,
         unet_params: Dict[str, Any],
@@ -185,7 +185,7 @@ class LatentDiffusionModel(pl.LightningModule):
         n_steps: int = 1000,
         beta_start: float = 1e-4,
         beta_end: float = 2e-2,
-        img_size: Tuple[int, int] = (64, 128),
+        img_size: Tuple[int, int] = (64, 256),
     ) -> None:
         """
         _summary_
@@ -205,13 +205,17 @@ class LatentDiffusionModel(pl.LightningModule):
         img_size : Tuple[int, int], optional
             _description_, by default (64, 256)
         """
-        
+
         super().__init__()
 
         self.model = DiffusionWrapper(unet_params, img_size)
+        self.ema = ExponentialMovingAverage(
+            self.model, beta=0.995, update_after_step=2000, update_every=1
+        )
         self.autoencoder = AutoencoderKL.from_pretrained(
             autoencoder_path, subfolder="vae"
         ).requires_grad_(False)
+
         self.n_steps = n_steps
         self.img_size = img_size
 
@@ -223,6 +227,11 @@ class LatentDiffusionModel(pl.LightningModule):
         self.alpha_bar = nn.Parameter(alpha_bar.to(torch.float32), requires_grad=False)
 
         self.save_hyperparameters()
+
+    def on_train_batch_end(
+        self, outputs: STEP_OUTPUT, batch: Any, batch_idx: int
+    ) -> None:
+        self.ema.update()
 
     def forward(
         self,
@@ -245,7 +254,7 @@ class LatentDiffusionModel(pl.LightningModule):
         Tuple[Tensor, Tensor]
             _description_
         """
-        
+
         writers, images, text = batch
 
         images = self.autoencoder.encode(images.to(torch.float32)).latent_dist.sample()
@@ -347,7 +356,7 @@ class LatentDiffusionModel(pl.LightningModule):
 
             word_tensor = rearrange(word_tensor, "v -> 1 v")
 
-            x = self.model.generate_image_noise(
+            x = self.ema.model.generate_image_noise(
                 beta_alpha=(self.beta, self.alpha, self.alpha_bar),
                 n=len(writer_id),
                 writer_id=writer_id,
