@@ -385,11 +385,9 @@ class DiffusionModel(pl.LightningModule):
 
         strokes, strokes_pred, pen_lifts, pen_lifts_pred, alphas = loss_batch
 
-        pen_lifts = torch.clamp(pen_lifts, min=1e-7, max=1 - 1e-7)
+        torch.clamp_(pen_lifts, min=1e-7, max=1 - 1e-7)
         pen_lifts_pred = rearrange(torch.sigmoid(pen_lifts_pred), "b h 1 -> b h")
-        strokes_loss = torch.mean(
-            torch.sum(torch.square(strokes - strokes_pred), dim=-1)
-        )
+        strokes_loss = torch.mean(torch.sum((strokes - strokes_pred) ** 2, dim=-1))
         pen_lifts_loss = torch.mean(
             F.binary_cross_entropy_with_logits(pen_lifts_pred, pen_lifts)
             * torch.squeeze(alphas, dim=-1)
