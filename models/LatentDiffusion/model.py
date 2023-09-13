@@ -73,7 +73,7 @@ class DiffusionWrapper(nn.Module):
         Tensor
             _description_
         """
-        
+
         return self.diffusion_model(
             x,
             time_step,
@@ -122,8 +122,13 @@ class DiffusionWrapper(nn.Module):
         Tensor
             _description_
         """
-        
+
         beta, alpha, alpha_bar = beta_alpha
+        if alpha.device != word.device:
+            beta = beta.to(device=word.device)
+            alpha = alpha.to(device=word.device)
+            alpha_bar = alpha_bar.to(device=word.device)
+
         with torch.no_grad():
             x = torch.randn(
                 (n, 4, self.img_size[0] // 8, self.img_size[1] // 8),
@@ -154,15 +159,15 @@ class DiffusionWrapper(nn.Module):
                         uncond_predicted_noise, predicted_noise, cfg_scale
                     )
 
-                alpha = rearrange(alpha[time_step], "v -> v 1 1 1")
-                alpha_bar = rearrange(alpha_bar[time_step], "v -> v 1 1 1")
-                beta = rearrange(beta[time_step], "v -> v 1 1 1")
+                alpha_t = rearrange(alpha[time_step], "v -> v 1 1 1")
+                alpha_bar_t = rearrange(alpha_bar[time_step], "v -> v 1 1 1")
+                beta_t = rearrange(beta[time_step], "v -> v 1 1 1")
                 noise = torch.randn_like(x) if i > 1 else torch.zeros_like(x)
 
-                scaling_factor = (1 - alpha) / (torch.sqrt(1 - alpha_bar))
+                scaling_factor = (1 - alpha_t) / (torch.sqrt(1 - alpha_bar_t))
                 x = (
-                    alpha**-0.5 * (x - scaling_factor * predicted_noise)
-                    + torch.sqrt(beta) * noise
+                    alpha_t**-0.5 * (x - scaling_factor * predicted_noise)
+                    + torch.sqrt(beta_t) * noise
                 )
 
         return x
@@ -321,7 +326,7 @@ class LatentDiffusionModel(pl.LightningModule):
         TypeError
             _description_
         """
-        
+
         words = text_line.split(" ")
         tokenizer = Tokenizer(vocab)
         if isinstance(writer_id, int):
