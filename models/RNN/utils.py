@@ -133,9 +133,7 @@ def get_mean_predictions(mixtures: Tuple[Tensor, ...], *, stochastic: bool) -> T
     return rearrange(out, "v -> 1 v")
 
 
-def bi_variate_gaussian(
-    x: Tensor, y: Tensor, mixtures: Tuple[Tensor, ...], *, eps: float = 1e-16
-) -> Tensor:
+def bi_variate_gaussian(x: Tensor, y: Tensor, mixtures: Tuple[Tensor, ...]) -> Tensor:
     """
     _summary_
 
@@ -147,8 +145,6 @@ def bi_variate_gaussian(
         _description_
     mixtures : Tuple[Tensor, ...]
         _description_
-    eps : float, optional
-        _description_, by default 1e-16
 
     Returns
     -------
@@ -158,15 +154,15 @@ def bi_variate_gaussian(
 
     mu_1, mu_2, sigma_1, sigma_2, rho = mixtures
 
-    x_diff = ((x - mu_1) / (sigma_1 + eps)) ** 2.0
-    y_diff = ((y - mu_2) / (sigma_2 + eps)) ** 2.0
-    xy_diff = 2.0 * rho * (x - mu_1) * (y - mu_2) / (sigma_1 * sigma_2 + eps)
+    x_diff = ((x - mu_1) / sigma_1) ** 2.0
+    y_diff = ((y - mu_2) / sigma_2) ** 2.0
+    xy_diff = 2.0 * (rho * (x - mu_1) * (y - mu_2)) / (sigma_1 * sigma_2)
     z = x_diff + y_diff - xy_diff
 
     rho_squared = 1.0 - rho**2
-    exp = torch.exp(-z / (2.0 * rho_squared + eps))
+    exp = torch.exp(-z / (2.0 * rho_squared))
     # noinspection PyTypeChecker
-    denominator = 2.0 * torch.pi * sigma_1 * sigma_2 * torch.sqrt(rho_squared) + eps
+    denominator = 2.0 * torch.pi * sigma_1 * sigma_2 * torch.sqrt(rho_squared)
 
     # noinspection PyTypeChecker
     return exp / denominator
