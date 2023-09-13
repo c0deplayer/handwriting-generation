@@ -5,10 +5,10 @@ data_path: "/home/codeplayer/Studia/Inżynierka/handwriting-generation/raw_data/
 batch_size: 48
 img_height: 64
 img_width: 256
-max_text_len: 10
-max_files: 2400
+max_text_len: 8
+max_files: 0
 vocab: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-train_size: 0.85
+train_size: 0.9
 
 autoencoder_path: "runwayml/stable-diffusion-v1-5"
 max_epochs: 1000
