@@ -28,7 +28,7 @@ class AttentionBlock(nn.Module):
     """
     _summary_
     """
-    
+
     def __init__(
         self,
         in_features: int,
@@ -134,7 +134,7 @@ class DiffusionModel(pl.LightningModule):
     """
     _summary_
     """
-    
+
     def __init__(
         self,
         num_layers: int = 2,

@@ -176,7 +176,7 @@ def truncated_normal_(tensor: Tensor, *, mean: float = 0.0, std: float = 1.0) ->
     Tensor
         _description_
     """
-    
+
     size = tensor.shape
     tmp = tensor.new_empty(size + (4,)).normal_()
     valid = (tmp < 2) & (tmp > -2)

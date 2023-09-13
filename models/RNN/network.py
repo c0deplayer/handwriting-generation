@@ -9,7 +9,7 @@ class MixtureDensityNetwork(nn.Module):
     """
     _summary_
     """
-    
+
     def __init__(
         self, in_features: int, out_features: int, *, bias: float = None
     ) -> None:

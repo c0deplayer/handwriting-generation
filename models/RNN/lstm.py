@@ -10,7 +10,7 @@ class LSTMCell(nn.Module):
     """
     _summary_
     """
-    
+
     def __init__(
         self, input_size: int, hidden_size: int, *, layer_norm: bool = False
     ) -> None:
@@ -26,7 +26,7 @@ class LSTMCell(nn.Module):
         layer_norm : bool, optional
             _description_, by default False
         """
-        
+
         super().__init__()
 
         self.hidden_lin = nn.Linear(hidden_size, 4 * hidden_size)
@@ -59,7 +59,7 @@ class LSTMCell(nn.Module):
         Tuple[Tensor, Tensor]
             _description_
         """
-        
+
         ifgo = self.hidden_lin(h) + self.input_lin(x)
 
         ifgo = ifgo.chunk(4, dim=-1)
@@ -77,7 +77,7 @@ class LSTM(nn.Module):
     """
     _summary_
     """
-    
+
     def __init__(
         self,
         input_size: int,
@@ -103,7 +103,7 @@ class LSTM(nn.Module):
         batch_first : bool, optional
             _description_, by default False
         """
-        
+
         super().__init__()
 
         self.n_layers = n_layers
@@ -136,7 +136,7 @@ class LSTM(nn.Module):
         Tuple[Tensor, Tuple[Tensor, Tensor]]
             _description_
         """
-        
+
         if self.batch_first:
             batch_size, n_steps, _ = x.size()
         else:

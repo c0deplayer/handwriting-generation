@@ -20,7 +20,7 @@ class RNNModel(pl.LightningModule):
     """
     _summary_
     """
-    
+
     def __init__(
         self,
         input_size: int,
@@ -105,7 +105,7 @@ class RNNModel(pl.LightningModule):
         optimizer : Optimizer
             _description_
         """
-        
+
         if self.lstm_clip is not None:
             lstm_tuple = (self.lstm_0, self.lstm_1, self.lstm_2)
             for lstm in lstm_tuple:
@@ -125,7 +125,7 @@ class RNNModel(pl.LightningModule):
         model : nn.Module
             _description_
         """
-        
+
         class_name = model.__class__.__name__
 
         if (
@@ -168,15 +168,15 @@ class RNNModel(pl.LightningModule):
 
         Returns
         -------
-        Union[Tuple[ 
-            Tuple[Tensor, ...], 
-            Tuple[Tensor, Tensor, Tensor], 
-            Tuple[Tensor, Tensor, Tensor], 
-        ], 
+        Union[Tuple[
+            Tuple[Tensor, ...],
+            Tuple[Tensor, Tensor, Tensor],
+            Tuple[Tensor, Tensor, Tensor],
+        ],
         Tuple[Tensor, ...], ]
             _description_
         """
-        
+
         strokes, text = batch
         kappa, window = kw
         batch_size = strokes.size(0)
