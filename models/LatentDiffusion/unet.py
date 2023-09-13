@@ -21,7 +21,8 @@ class TimestepEmbedSequential(nn.Sequential):
             elif isinstance(layer, SpatialTransformer):
                 x = layer(x, context=context)
             else:
-                x = layer(x)
+                # TODO: Hack - find what causes this to happen
+                x = layer(x.float())
 
         return x
 
