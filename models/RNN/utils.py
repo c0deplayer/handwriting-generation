@@ -1,17 +1,19 @@
-from typing import Tuple
+from typing import Tuple, List, Union
 
 import torch
 from einops import rearrange
 from torch import Tensor
 
 
-def reshape_down(batch: Tensor, ground_true: Tensor = None) -> Tensor:
+def reshape_down(
+    batch: Union[Tensor, List[Tensor]], ground_true: Tensor = None
+) -> Union[Tensor, List[Tensor]]:
     """
     _summary_
 
     Parameters
     ----------
-    batch : Tensor
+    batch : Union[Tensor, List[Tensor]]
         _description_
     ground_true : Tensor, optional
         _description_, by default None
@@ -29,6 +31,19 @@ def reshape_down(batch: Tensor, ground_true: Tensor = None) -> Tensor:
 
     if ground_true is None:
         return rearrange(batch, "b h w -> (b h) w")
+
+    if isinstance(batch, list):
+        for index, tensor in enumerate(batch):
+            if tensor.size(0) != ground_true.size(0) or tensor.size(
+                1
+            ) != ground_true.size(1):
+                raise RuntimeError(
+                    f"Expected batch to be of shape {ground_true.size()}, got {tensor.size()}"
+                )
+
+            batch[index] = rearrange(tensor, "b h w -> (b h) w")
+
+        return batch
 
     if batch.size(0) != ground_true.size(0) or batch.size(1) != ground_true.size(1):
         raise RuntimeError(
