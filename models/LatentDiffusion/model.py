@@ -358,7 +358,7 @@ class LatentDiffusionModel(pl.LightningModule):
             )
 
             x /= 0.18215
-            image = self.autoencoder.decode(x).sample()
+            image = self.autoencoder.decode(x.float()).sample
 
             image = (image / 2 + 0.5).clamp(0, 1).cpu()
             utils.save_image(image, save_path)
