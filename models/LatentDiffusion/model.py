@@ -6,12 +6,15 @@ import torch
 import torch.nn.functional as F
 from diffusers import AutoencoderKL
 from einops import rearrange
+from pytorch_lightning.utilities.types import STEP_OUTPUT
 from rich.progress import track
 from torch import Tensor, nn
 from torch.optim import Optimizer
 
 from data.tokenizer import Tokenizer
+from data.utils import get_encoded_text_with_one_hot_encoding
 from . import utils
+from .ema import ExponentialMovingAverage
 from .unet import UNetModel
 
 
@@ -330,8 +333,14 @@ class LatentDiffusionModel(pl.LightningModule):
 
         # TODO: Combine images into one image to create a line of text
         for word in words:
-            word_enc = tokenizer.encode(word)
-            word_tensor = torch.tensor(word_enc, dtype=torch.long, device=self.device)
+            _, word_enc = get_encoded_text_with_one_hot_encoding(
+                word, tokenizer=tokenizer, max_len=8
+            )
+            word_tensor = torch.as_tensor(
+                word_enc, dtype=torch.long, device=self.device
+            )
+
+            word_tensor = rearrange(word_tensor, "v -> 1 v")
 
             x = self.model.generate_image_noise(
                 beta_alpha=(self.beta, self.alpha, self.alpha_bar),
