@@ -322,7 +322,7 @@ class LatentDiffusionModel(pl.LightningModule):
         words = text_line.split(" ")
         tokenizer = Tokenizer(vocab)
         if isinstance(writer_id, int):
-            writer_id = torch.tensor(writer_id, dtype=torch.int32, device=self.device)
+            writer_id = torch.as_tensor([writer_id], device=self.device)
         elif not isinstance(writer_id, tuple):
             raise TypeError(
                 f"Expected writer_id to be int or tuple, got {type(writer_id)}"
