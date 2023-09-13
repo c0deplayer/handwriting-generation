@@ -30,7 +30,22 @@ class CharacterEncoder(nn.Module):
 
 
 class PositionalEncoder(nn.Module):
+    """
+    _summary_
+    """
+
     def __init__(self, d_model: int, d_emb: int) -> None:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        d_model : int
+            _description_
+        d_emb : int
+            _description_
+        """
+
         super().__init__()
 
         self.register_buffer(
@@ -38,10 +53,35 @@ class PositionalEncoder(nn.Module):
         )
 
     def forward(self):
+        """
+        _summary_
+
+        Returns
+        -------
+        _type_
+            _description_
+        """
+
         return self.positional_encodings.detach().requires_grad_(False)
 
     @staticmethod
     def get_positional_encoding(d_model: int, d_emb: int) -> Tensor:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        d_model : int
+            _description_
+        d_emb : int
+            _description_
+
+        Returns
+        -------
+        Tensor
+            _description_
+        """
+
         encodings = torch.zeros(d_model, d_emb)
         for pos, i in itertools.product(range(d_model), range(0, d_emb, 2)):
             encodings[pos, i] = math.sin(pos / (10000 ** (i / d_emb)))

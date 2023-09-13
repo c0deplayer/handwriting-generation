@@ -13,11 +13,19 @@ from .activation import GeGLU
 
 
 class GroupNorm32(nn.GroupNorm):
+    """
+    _summary_
+    """
+    
     def forward(self, x: Tensor) -> Tensor:
         return super().forward(x.float()).type(x.dtype)
 
 
 class FeedForwardNetwork(nn.Module):
+    """
+    _summary_
+    """
+    
     def __init__(
         self,
         d_model: int,
@@ -26,6 +34,21 @@ class FeedForwardNetwork(nn.Module):
         d_mult: int = 4,
         dropout: float = 0.0,
     ) -> None:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        d_model : int
+            _description_
+        d_out : int, optional
+            _description_, by default None
+        d_mult : int, optional
+            _description_, by default 4
+        dropout : float, optional
+            _description_, by default 0.0
+        """
+        
         super().__init__()
 
         if d_out is None:
@@ -44,16 +67,49 @@ class FeedForwardNetwork(nn.Module):
 def noise_image(
     x: Tensor, time_step: Tensor, alpha_bar: Tensor
 ) -> Tuple[Tensor, Tensor]:
+    """
+    _summary_
+
+    Parameters
+    ----------
+    x : Tensor
+        _description_
+    time_step : Tensor
+        _description_
+    alpha_bar : Tensor
+        _description_
+
+    Returns
+    -------
+    Tuple[Tensor, Tensor]
+        _description_
+    """
+    
     sqrt_alpha_bar = rearrange(torch.sqrt(alpha_bar[time_step]), "v -> v 1 1 1")
     sqrt_one_minus_alpha_bar = rearrange(
         torch.sqrt(1 - alpha_bar[time_step]), "v -> v 1 1 1"
     )
+    
     noise = torch.randn_like(x)
 
     return sqrt_alpha_bar * x + sqrt_one_minus_alpha_bar * noise, noise
 
 
 def __crop_whitespaces(image: Image) -> Image:
+    """
+    _summary_
+
+    Parameters
+    ----------
+    image : Image
+        _description_
+
+    Returns
+    -------
+    Image
+        _description_
+    """
+    
     img_gray = image.convert("L")
     # noinspection PyTypeChecker
     img_gray = np.array(img_gray)
@@ -67,6 +123,17 @@ def __crop_whitespaces(image: Image) -> Image:
 
 
 def save_image(image: Tensor, path: Path) -> None:
+    """
+    _summary_
+
+    Parameters
+    ----------
+    image : Tensor
+        _description_
+    path : Path
+        _description_
+    """
+    
     image = rearrange(image, "1 h w c -> h w c")
 
     img = torchvision.transforms.ToPILImage()(image)

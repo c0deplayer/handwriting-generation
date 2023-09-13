@@ -16,7 +16,22 @@ from .unet import UNetModel
 
 
 class DiffusionWrapper(nn.Module):
+    """
+    _summary_
+    """
+
     def __init__(self, kwargs_unet: Dict[str, Any], img_size: Tuple[int, int]) -> None:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        kwargs_unet : Dict[str, Any]
+            _description_
+        img_size : Tuple[int, int]
+            _description_
+        """
+
         super().__init__()
 
         self.diffusion_model = UNetModel(**kwargs_unet)
@@ -32,6 +47,30 @@ class DiffusionWrapper(nn.Module):
         interpolation: bool = False,
         mix_rate: float = None,
     ) -> Tensor:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        x : Tensor
+            _description_
+        time_step : Tensor
+            _description_
+        context : Tensor, optional
+            _description_, by default None
+        writer_id : Union[Tensor, Tuple[int, int]], optional
+            _description_, by default None
+        interpolation : bool, optional
+            _description_, by default False
+        mix_rate : float, optional
+            _description_, by default None
+
+        Returns
+        -------
+        Tensor
+            _description_
+        """
+        
         return self.diffusion_model(
             x,
             time_step,
@@ -53,6 +92,34 @@ class DiffusionWrapper(nn.Module):
         interpolation: bool = False,
         cfg_scale: int = 3,
     ) -> Tensor:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        beta_alpha : Tuple[Tensor, Tensor, Tensor]
+            _description_
+        n : int
+            _description_
+        writer_id : Union[Tensor, Tuple[int, int]]
+            _description_
+        word : Tensor
+            _description_
+        n_steps : int
+            _description_
+        mix_rate : float, optional
+            _description_, by default None
+        interpolation : bool, optional
+            _description_, by default False
+        cfg_scale : int, optional
+            _description_, by default 3
+
+        Returns
+        -------
+        Tensor
+            _description_
+        """
+        
         beta, alpha, alpha_bar = beta_alpha
         with torch.no_grad():
             x = torch.randn(
@@ -99,6 +166,10 @@ class DiffusionWrapper(nn.Module):
 
 
 class LatentDiffusionModel(pl.LightningModule):
+    """
+    _summary_
+    """
+    
     def __init__(
         self,
         unet_params: Dict[str, Any],
@@ -108,6 +179,25 @@ class LatentDiffusionModel(pl.LightningModule):
         beta_end: float = 2e-2,
         img_size: Tuple[int, int] = (64, 128),
     ) -> None:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        unet_params : Dict[str, Any]
+            _description_
+        autoencoder_path : str
+            _description_
+        n_steps : int, optional
+            _description_, by default 1000
+        beta_start : float, optional
+            _description_, by default 1e-4
+        beta_end : float, optional
+            _description_, by default 2e-2
+        img_size : Tuple[int, int], optional
+            _description_, by default (64, 256)
+        """
+        
         super().__init__()
 
         self.model = DiffusionWrapper(unet_params, img_size)
@@ -132,6 +222,22 @@ class LatentDiffusionModel(pl.LightningModule):
         *,
         interpolation: bool = False,
     ) -> Tuple[Tensor, Tensor]:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        batch : Tuple[Tensor, ...]
+            _description_
+        interpolation : bool, optional
+            _description_, by default False
+
+        Returns
+        -------
+        Tuple[Tensor, Tensor]
+            _description_
+        """
+        
         writers, images, text = batch
 
         images = self.autoencoder.encode(images.to(torch.float32)).latent_dist.sample()
@@ -189,6 +295,30 @@ class LatentDiffusionModel(pl.LightningModule):
         interpolation: bool = False,
         mix_rate: float = None,
     ) -> None:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        text_line : str
+            _description_
+        vocab : str
+            _description_
+        writer_id : Union[int, Tuple[int, int]]
+            _description_
+        save_path : Path
+            _description_
+        interpolation : bool, optional
+            _description_, by default False
+        mix_rate : float, optional
+            _description_, by default None
+
+        Raises
+        ------
+        TypeError
+            _description_
+        """
+        
         words = text_line.split(" ")
         tokenizer = Tokenizer(vocab)
         if isinstance(writer_id, int):
