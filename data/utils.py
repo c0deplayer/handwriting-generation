@@ -1,3 +1,4 @@
+import warnings
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Union, Dict, List, Tuple, Any
@@ -9,8 +10,8 @@ import torch
 import torch.nn.functional as F
 from PIL import Image as ImageModule, ImageOps
 from PIL.Image import Image
+from numpy.linalg import norm
 from rich.progress import track
-from scipy.signal import savgol_filter
 
 from .tokenizer import Tokenizer
 
@@ -77,57 +78,75 @@ def get_line_strokes(path: Path, max_length: int) -> np.array:
         raise ValueError("No StrokeSet element found in XML file")
 
     strokes_cord = []
+    prev_cord = None
 
     for stroke in stroke_set_tag.findall("Stroke"):
-        strokes_cord.extend(
-            [float(point.attrib["x"]), -float(point.attrib["y"]), 0.0]
-            for point in stroke.findall("Point")
-        )
-        strokes_cord[-1][2] = 1.0
+        for point in stroke.findall("Point"):
+            x, y, time = (
+                float(point.attrib["x"]),
+                float(point.attrib["y"]),
+                float(point.attrib["time"]),
+            )
 
-    strokes = np.array(strokes_cord, dtype=np.float32)
-    strokes = __denoise_strokes(strokes)
-    # strokes[:, 2] = np.roll(strokes[:, 2], 1)
+            if prev_cord is not None:
+                dx, dy = x - prev_cord[0], -y - prev_cord[1]
+                strokes_cord.append([dx, dy, 0.0, time])
+
+            prev_cord = [x, -y]
+
+        if strokes_cord:
+            strokes_cord[-1][2] = 1.0
+        else:
+            strokes_cord.append([prev_cord[0], prev_cord[1], 1.0, time])
+
+    strokes = np.array(strokes_cord)
+    strokes = strokes[np.argsort(strokes[:, 3])][:, :3]
     strokes[:, :2] /= np.std(strokes[:, :2])
+
+    for _ in range(3):
+        strokes = __combine_strokes(strokes, int(len(strokes) * 0.15))
 
     return __pad_strokes(strokes, max_length)
 
 
-def __denoise_strokes(strokes: np.array) -> np.array:
+def __combine_strokes(strokes: np.ndarray, n: int) -> np.ndarray:
     """
     _summary_
-
     Parameters
     ----------
-    strokes : np.array
+    strokes : np.ndarray
         _description_
-
+    n : int
+        _description_
     Returns
     -------
-    np.array
+    np.ndarray
         _description_
     """
 
-    stroke_segments = np.split(strokes, np.where(strokes[:, 2] == 1)[0] + 1, axis=0)
-    n_strokes = []
+    s, s_neighbors = strokes[::2, :2], strokes[1::2, :2]
 
-    for strokes in stroke_segments:
-        if len(strokes) != 0:
-            x_smooth = savgol_filter(
-                strokes[:, 0], window_length=7, polyorder=3, mode="nearest"
-            )
-            y_smooth = savgol_filter(
-                strokes[:, 1], window_length=7, polyorder=3, mode="nearest"
-            )
-            smoothed_stroke = np.column_stack((x_smooth, y_smooth, strokes[:, 2]))
-            n_strokes.append(smoothed_stroke)
+    if len(strokes) % 2:
+        warnings.warn(
+            "The number of strokes is odd, so the last stroke will be ignored.",
+            UserWarning,
+        )
+        s = s[:-1]
 
-    strokes = np.vstack(n_strokes)
-    diffs = np.concatenate(
-        [strokes[1:, :2] - strokes[:-1, :2], strokes[1:, 2:3]], axis=1
+    values = (
+        norm(s, axis=-1) + norm(s_neighbors, axis=-1) - norm(s + s_neighbors, axis=-1)
     )
+    indices = np.argsort(values)[:n]
 
-    return np.vstack((np.array([[0.0, 0.0, 0.0]]), diffs))
+    strokes[indices * 2] += strokes[indices * 2 + 1]
+    strokes[indices * 2, 2] = np.greater(strokes[indices * 2, 2], 0)
+    strokes = np.delete(strokes, indices * 2 + 1, axis=0)
+    strokes[:, :2] /= np.std(strokes[:, :2])
+
+    if not strokes[-1, 2]:
+        strokes[-1, 2] = 1.0
+
+    return strokes
 
 
 def get_image(
@@ -430,9 +449,7 @@ def save_dataset_to_h5(
     with h5py.File(path, mode="w") as f:
         dataset_h5 = f.create_group("dataset_group")
 
-        for i, data_dict in track(
-            enumerate(dataset), description="Saving dataset for later usage..."
-        ):
+        for i, data_dict in track(enumerate(dataset), description="Saving dataset..."):
             writer_id = data_dict["writer"]
             group = dataset_h5.create_group(f"dataset_{i}")
             group.attrs["writer"] = writer_id
