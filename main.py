@@ -40,22 +40,6 @@ DATASETS = {
 }
 
 
-def set_random_seed(
-    seed: int = 42,
-    deterministic: bool = False,
-) -> None:
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-
-    if deterministic:
-        torch.backends.cudnn.deterministic = True  # noqa
-        torch.backends.cudnn.benchmark = False  # noqa
-
-
 def cli_main():
     parser = ArgumentParser()
     parser.add_argument(
@@ -243,7 +227,6 @@ def train_model():
     if config.device == "cuda" and args.remote:
         kwargs_trainer["devices"] = [1]
 
-    set_random_seed()
     model = MODELS[args.config](**kwargs_model)
     dataset = DATASETS[args.config]
     data_module = DataModule(config=config, dataset=dataset)
