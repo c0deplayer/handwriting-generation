@@ -2,12 +2,12 @@ device: "cuda"
 checkpoint_path: "/home/codeplayer/Studia/Inżynierka/handwriting-generation/model_checkpoints/LatentDiffusion"
 data_path: "/home/codeplayer/Studia/Inżynierka/handwriting-generation/raw_data/IAMDB"
 
-batch_size: 48
+batch_size: 200
 img_height: 64
 img_width: 256
 max_text_len: 8
 max_files: 0
-vocab: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+vocab: " _abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ,"
 train_size: 0.9
 
 autoencoder_path: "runwayml/stable-diffusion-v1-5"
@@ -16,7 +16,7 @@ channels: 4
 emb_dim: 320
 n_heads: 4
 res_layers: 1
-n_steps: 1000
+n_steps: 700
 d_cond: 320
 beta_start: 0.0001
 beta_end: 0.02
@@ -28,4 +28,4 @@ channel_multipliers: !!python/tuple
   - 1
   - 1
 
-drop_rate: 0.0
+drop_rate: 0.2

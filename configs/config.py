@@ -53,6 +53,7 @@ class ConfigDiffusion(BaseConfig):
     img_width: int
     max_seq_len: int
 
+    use_ema: bool
     num_layers: int
     channels: int
     drop_rate: float

@@ -12,18 +12,19 @@ checkpoint_path: "/home/codeplayer/Studia/Inżynierka/handwriting-generation/mod
 data_path: "/home/codeplayer/Studia/Inżynierka/handwriting-generation/raw_data/IAMonDB"
 dataset_txt: "/home/codeplayer/Studia/Inżynierka/handwriting-generation/raw_data/IAMonDB/dataset.txt"
 
-batch_size: 64
+batch_size: 96
 img_height: 90
 img_width: 1400
 max_files: 0
 max_seq_len: 560
-max_text_len: 50
-train_size: 0.85
-vocab: " _abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+max_text_len: 60
+train_size: 0.9
+vocab: " _abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ,"
 
+use_ema: True
 max_epochs: 60000
 channels: 128
-drop_rate: 0.0
+drop_rate: 0.2
 num_layers: 2
 clip_grad: 100.0
 clip_algorithm: "norm"
