@@ -1,4 +1,5 @@
 import copy
+from typing import Tuple
 
 import torch
 import torch.nn as nn
@@ -18,8 +19,11 @@ class ExponentialMovingAverage(nn.Module):
         *,
         ema_model: nn.Module = None,
         beta: float = 0.9999,
-        update_after_step: int = 100,
+        update_after_step: int = 1000,
         update_every: int = 10,
+        inv_gamma: float = 1.0,
+        power: float = 2 / 3,
+        min_value: float = 0.0,
     ):
         """
         _summary_
@@ -33,14 +37,23 @@ class ExponentialMovingAverage(nn.Module):
         beta : float, optional
             _description_, by default 0.9999
         update_after_step : int, optional
-            _description_, by default 100
+            _description_, by default 1000
         update_every : int, optional
             _description_, by default 10
+        inv_gamma : float, optional
+            _description_, by default 1.0
+        power : float, optional
+            _description_, by default 2 / 3
+        min_value : float, optional
+            _description_, by default 0.0
         """
-        
+
         super().__init__()
 
         self.beta = beta
+        self.inv_gamma = inv_gamma
+        self.power = power
+        self.min_value = min_value
         self.__model = model
         self.ema_model = ema_model
 
@@ -48,6 +61,12 @@ class ExponentialMovingAverage(nn.Module):
             self.ema_model = copy.deepcopy(model)
 
         self.ema_model.requires_grad_(False)
+
+        self.parameter_names = {
+            name
+            for name, param in self.ema_model.named_parameters()
+            if param.dtype in [torch.float, torch.float16, torch.float32]
+        }
 
         self.update_every = update_every
         self.update_after_step = update_after_step
@@ -59,43 +78,32 @@ class ExponentialMovingAverage(nn.Module):
     def model(self) -> nn.Module:
         return self.ema_model
 
+    # noinspection PyUnresolvedReferences
     @torch.no_grad()
-    def update_moving_average(
-        self, ma_model: nn.Module, current_model: nn.Module
-    ) -> None:
+    def update_moving_average(self) -> None:
         """
         _summary_
-
-        Parameters
-        ----------
-        ma_model : nn.Module
-            _description_
-        current_model : nn.Module
-            _description_
         """
-        
-        for current_params, ma_params in zip(
-            current_model.parameters(), ma_model.parameters()
+
+        current_decay = self.get_current_decay()
+
+        for (_, ma_params), (_, current_params) in zip(
+            self.get_params_iter(self.ema_model), self.get_params_iter(self.__model)
         ):
-            old_weight, up_weight = ma_params.data, current_params.data
-            if old_weight is None:
-                ma_params.data.copy_(up_weight)
+            if ma_params.data is None:
+                ma_params.data.copy_(current_params.data)
             else:
-                ma_params.data.copy_(
-                    old_weight * self.beta + (1 - self.beta) * up_weight
-                )
+                ma_params.data.lerp_(current_params.data, 1.0 - current_decay)
 
-    def update(
-        self,
-    ) -> None:
+    def update(self) -> None:
         """
         _summary_
         """
-        
+
         step = self.step.item()
         self.step += 1
 
-        if not step % self.update_every:
+        if step % self.update_every:
             return
 
         if self.step <= self.update_after_step:
@@ -104,24 +112,32 @@ class ExponentialMovingAverage(nn.Module):
 
         if not self.initiated.item():
             self.copy_params_from_model_to_ema()
-            self.initted.data.copy_(torch.Tensor([True]))
+            self.initiated.data.copy_(torch.Tensor([True]))
 
         self.update_moving_average(self.ema_model, self.__model)
+
+    def get_current_decay(self) -> float:
+        step = max(self.step.item() - self.update_after_step - 1, 0.0)
+        value = 1 - (1 + step / self.inv_gamma) ** -self.power
+
+        return 0.0 if step <= 0 else min(max(value, self.min_value), self.beta)
 
     def copy_params_from_model_to_ema(self) -> None:
         """
         _summary_
         """
-        
+
         for (_, ma_params), (_, current_params) in zip(
             self.get_params_iter(self.ema_model), self.get_params_iter(self.__model)
         ):
             ma_params.data.copy_(current_params.data)
 
-        for (_, ma_buffers), (_, current_buffers) in zip(
-            self.get_buffers_iter(self.ema_model), self.get_buffers_iter(self.__model)
-        ):
-            ma_buffers.data.copy_(current_buffers.data)
+    def get_params_iter(self, model: nn.Module) -> Tuple[str, Tensor]:
+        for name, param in model.named_parameters():
+            if name not in self.parameter_names:
+                continue
+
+            yield name, param
 
     def __call__(self, *args, **kwargs) -> Tensor:
         """
@@ -132,5 +148,5 @@ class ExponentialMovingAverage(nn.Module):
         Tensor
             _description_
         """
-        
+
         return self.ema_model(*args, **kwargs)

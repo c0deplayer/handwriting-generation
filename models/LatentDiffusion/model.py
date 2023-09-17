@@ -13,8 +13,8 @@ from torch.optim import Optimizer
 
 from data.tokenizer import Tokenizer
 from data.utils import get_encoded_text_with_one_hot_encoding
+from models.ema import ExponentialMovingAverage
 from . import utils
-from .ema import ExponentialMovingAverage
 from .unet import UNetModel
 
 
@@ -210,7 +210,12 @@ class LatentDiffusionModel(pl.LightningModule):
 
         self.model = DiffusionWrapper(unet_params, img_size)
         self.ema = ExponentialMovingAverage(
-            self.model, beta=0.995, update_after_step=2000, update_every=1
+            self.model,
+            beta=0.995,
+            update_after_step=2000,
+            update_every=1,
+            inv_gamma=1.0,
+            power=1.0,
         )
         self.autoencoder = AutoencoderKL.from_pretrained(
             autoencoder_path, subfolder="vae"
@@ -229,7 +234,7 @@ class LatentDiffusionModel(pl.LightningModule):
         self.save_hyperparameters()
 
     def on_train_batch_end(
-        self, outputs: STEP_OUTPUT, batch: Any, batch_idx: int
+        self, outputs: STEP_OUTPUT, batch: Tuple[Tensor, ...], batch_idx: int
     ) -> None:
         self.ema.update()
 
