@@ -51,7 +51,7 @@ def get_beta_set(*, device: torch.device) -> Tensor:
     )
 
 
-def get_alphas(batch_size: int, alpha_set: Tensor) -> Tensor:
+def get_alphas(batch_size: int, alpha_set: Tensor, *, device: torch.device) -> Tensor:
     """
     _summary_
 
@@ -67,17 +67,22 @@ def get_alphas(batch_size: int, alpha_set: Tensor) -> Tensor:
     Tensor
         _description_
     """
-    
+
+    if alpha_set.device != device:
+        alpha_set = alpha_set.to(device=device)
+
     alpha_indices = torch.randint(
-        low=0, high=(len(alpha_set) - 1), size=(batch_size, 1), dtype=torch.int64
         low=0,
+        high=(len(alpha_set) - 1),
         size=(batch_size, 1),
         dtype=torch.int64,
         device=device,
     )
     lower_alphas = alpha_set[alpha_indices]
     upper_alphas = alpha_set[alpha_indices + 1]
-    alphas = torch.rand(lower_alphas.shape) * (upper_alphas - lower_alphas)
+    alphas = torch.rand(lower_alphas.shape, device=device) * (
+        upper_alphas - lower_alphas
+    )
     alphas += lower_alphas
     alphas = rearrange(alphas, "b 1 -> b 1 1")
 

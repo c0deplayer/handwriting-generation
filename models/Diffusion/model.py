@@ -264,8 +264,7 @@ class DiffusionModel(pl.LightningModule):
         strokes, text, style = batch
         strokes, pen_lifts = strokes[:, :, :2], strokes[:, :, 2]
 
-        alphas = utils.get_alphas(strokes.size(0), self.alpha)
-        alphas = alphas.to(strokes.device)
+        alphas = utils.get_alphas(strokes.size(0), self.alpha, device=strokes.device)
         eps = torch.randn_like(strokes)
 
         strokes_perturbed = torch.sqrt(alphas) * strokes
@@ -288,8 +287,7 @@ class DiffusionModel(pl.LightningModule):
         strokes, text, style = batch
         strokes, pen_lifts = strokes[:, :, :2], strokes[:, :, 2]
 
-        alphas = utils.get_alphas(strokes.size(0), self.alpha)
-        alphas = alphas.to(strokes.device)
+        alphas = utils.get_alphas(strokes.size(0), self.alpha, device=strokes.device)
         eps = torch.randn_like(strokes)
 
         strokes_perturbed = torch.sqrt(alphas) * strokes
