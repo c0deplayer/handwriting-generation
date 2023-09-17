@@ -190,10 +190,10 @@ class MultiHeadAttention(nn.Module):
         Tuple[Tensor, Tensor]
             _description_
         """
-        
+
         scores = q @ k.transpose(-2, -1)
-        d_k = k.size(1)
-        scores /= math.sqrt(d_k)
+        dk = k.size(-1)
+        scores /= math.sqrt(dk)
 
         if mask is not None:
             scores += mask * -1e12
