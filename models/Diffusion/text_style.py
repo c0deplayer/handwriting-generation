@@ -15,7 +15,7 @@ class StyleExtractor(nn.Module):
     Rescales to [-1, 1] and repeats along the channel axis for 3 channels.
     Uses a MobileNetV2 with pretrained model_checkpoints from imagenet as initial model_checkpoints.
     """
-    
+
     def __init__(self, *, device: torch.device) -> None:
         """
         _summary_
@@ -48,7 +48,7 @@ class StyleExtractor(nn.Module):
         Returns:
             Tensor: _description_
         """
-        
+
         x = image.clone().detach().to(self.device)
 
         x = x / 127.5 - 1
@@ -56,7 +56,7 @@ class StyleExtractor(nn.Module):
 
         x = self.mobilenet_v2(x)
         x = self.pooling(x)
-        x = rearrange(x, "1 h 1 w -> 1 h w")
+        x = rearrange(x, "1 h 1 w -> w h")
 
         return x.cpu()
 
@@ -65,7 +65,7 @@ class TextStyleEncoder(nn.Module):
     """
     _summary_
     """
-    
+
     def __init__(
         self,
         in_features: int,

@@ -242,8 +242,6 @@ class IAMonDataset(Dataset):
                 with torch.no_grad():
                     style = self.style_extractor(writer_image)
 
-                style = rearrange(style, "1 h w -> w h")
-
                 dataset.append(
                     {
                         "writer": writer_id,
