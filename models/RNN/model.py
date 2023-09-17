@@ -96,6 +96,9 @@ class RNNModel(pl.LightningModule):
 
         self.save_hyperparameters()
 
+    def on_fit_start(self) -> None:
+        pl.seed_everything(seed=42)
+
     def on_before_optimizer_step(self, optimizer: Optimizer) -> None:
         """
         _summary_
@@ -359,7 +362,9 @@ class RNNModel(pl.LightningModule):
         stochastic : bool, optional
             _description_, by default True
         """
-        
+
+        pl.seed_everything(seed=42)
+
         if not primed:
             tokenizer = Tokenizer(vocab)
             eye = torch.eye(tokenizer.get_vocab_size(), device=self.device)

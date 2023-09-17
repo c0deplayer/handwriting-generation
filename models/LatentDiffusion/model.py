@@ -233,6 +233,9 @@ class LatentDiffusionModel(pl.LightningModule):
 
         self.save_hyperparameters()
 
+    def on_fit_start(self) -> None:
+        pl.seed_everything(seed=42)
+
     def on_train_batch_end(
         self, outputs: STEP_OUTPUT, batch: Tuple[Tensor, ...], batch_idx: int
     ) -> None:
@@ -340,6 +343,8 @@ class LatentDiffusionModel(pl.LightningModule):
         TypeError
             _description_
         """
+
+        pl.seed_everything(seed=42)
 
         words = text_line.split(" ")
         tokenizer = Tokenizer(vocab)
