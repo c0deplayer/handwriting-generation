@@ -98,7 +98,7 @@ class TextStyleEncoder(nn.Module):
         self.embedding = nn.Embedding(vocab_size, d_model)
         self.affine_1 = AffineTransformLayer(in_features // 8, d_model)
 
-        self.mha = MultiHeadAttention(d_model, 8)
+        self.mha = MultiHeadAttention(d_model, 8, return_weights=False)
         self.affine_2 = AffineTransformLayer(in_features // 8, d_model)
         self.text_ffn = FeedForwardNetwork(d_model, d_model, hidden_size=d_model * 2)
         self.affine_3 = AffineTransformLayer(in_features // 8, d_model)
@@ -130,7 +130,7 @@ class TextStyleEncoder(nn.Module):
         text = self.embedding(text)
         text = self.affine_1(self.layer_norm(text), sigma)
 
-        mha, _ = self.mha(text, style, style)
+        mha = self.mha(text, style, style)
         text = self.affine_2(self.layer_norm(text + mha), sigma)
 
         text = self.layer_norm(self.text_ffn(text))

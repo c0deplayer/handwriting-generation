@@ -111,42 +111,7 @@ def create_padding_mask(text: Tensor, repeats: int = 1) -> Tensor:
     return repeat(text, "b 1 1 h -> b 1 1 (h repeats)", repeats=repeats)
 
 
-def standard_diffusion_step(
-    strokes: Tensor, out: Tensor, beta: Tensor, alpha: Tensor, *, add_sigma: bool
-) -> Tensor:
-    """
-    _summary_
-
-    Parameters
-    ----------
-    strokes : Tensor
-        _description_
-    out : Tensor
-        _description_
-    beta : Tensor
-        _description_
-    alpha : Tensor
-        _description_
-    add_sigma : bool
-        _description_
-
-    Returns
-    -------
-    Tensor
-        _description_
-    """
-    
-    strokes = (1 / torch.sqrt(1 - beta)) * (
-        strokes - (beta * out / torch.sqrt(1 - alpha))
-    )
-
-    if add_sigma:
-        strokes += torch.sqrt(beta) * torch.randn(strokes.shape)
-
-    return strokes
-
-
-def new_diffusion_step(
+def diffusion_step(
     strokes: Tensor, eps: Tensor, beta: Tensor, alpha: Tensor, alpha_next: Tensor
 ) -> Tensor:
     """
@@ -170,9 +135,11 @@ def new_diffusion_step(
     Tensor
         _description_
     """
-    
+
     strokes_t_minus = (strokes - torch.sqrt(1 - alpha) * eps) / torch.sqrt(1 - beta)
-    strokes_t_minus += torch.randn(strokes.shape) * torch.sqrt(1 - alpha_next)
+    strokes_t_minus += torch.randn(strokes.shape, device=strokes.device) * torch.sqrt(
+        1 - alpha_next
+    )
 
     return strokes_t_minus
 

@@ -362,8 +362,8 @@ class DiffusionModel(pl.LightningModule):
         sequence: str,
         vocab: str,
         *,
+        save_path: str,
         style_path: Path = None,
-        diffusion_mode: str = "new",
     ) -> None:
         """
         _summary_
@@ -374,10 +374,10 @@ class DiffusionModel(pl.LightningModule):
             _description_
         vocab : str
             _description_
+        save_path : str
+            _description_
         style_path : Path | None, optional
             _description_, by default None
-        diffusion_mode : str, optional
-            _description_, by default "new"
 
         Returns
         -------
@@ -385,56 +385,56 @@ class DiffusionModel(pl.LightningModule):
             _description_
         """
 
+        pl.seed_everything(seed=42)
+
         if style_path is None:
             asset_dir = os.listdir("assets")
             style_path = Path(
                 f"assets/{asset_dir[np.random.randint(0, len(asset_dir))]}"
             )
 
-        tokenizer = Tokenizer(vocab)
         style_extractor = StyleExtractor(device=self.device)
-        beta_set = utils.get_beta_set(device=self.device)
-        alpha_set = torch.cumprod(1 - beta_set, dim=0)
 
         time_steps = len(sequence) * 16
-        time_steps -= (time_steps % 8) + 8
+        time_steps = time_steps - (time_steps % 8) + 8
 
         writer_style = get_image(style_path, 1400, 96)
-        writer_style = rearrange(torch.tensor(writer_style), "h w -> 1 1 h w")
+        writer_style = rearrange(
+            transforms.PILToTensor()(writer_style).to(torch.float32), "1 h w -> 1 1 h w"
+        )
 
         style_vector = style_extractor(writer_style)
-        style_vector = rearrange(style_vector, "1 h w -> 1 w h")
+        style_vector = rearrange(style_vector, "h w -> 1 h w")
 
-        sequence = torch.tensor(
-            [tokenizer.encode(sequence)], dtype=torch.int32, device=self.device
+        _, sequence = get_encoded_text_with_one_hot_encoding(
+            sequence, tokenizer=Tokenizer(vocab), max_len=0
         )
+
+        sequence = rearrange(torch.tensor(sequence, device=self.device), "v -> 1 v")
         batch_size = sequence.size(0)
-        beta_len = len(beta_set)
+        beta_len = len(self.beta)
         strokes = torch.randn((batch_size, time_steps, 2), device=self.device)
+        style_vector = style_vector.to(device=self.device)
 
-        for i in track(range(beta_len - 1, -1, -1)):
-            alpha = alpha_set[i] * torch.ones((batch_size, 1, 1), device=self.device)
-            beta = beta_set[i] * torch.ones((batch_size, 1, 1), device=self.device)
-            alpha_next = (
-                alpha_set[i - 1] if i > 0 else torch.tensor(1.0, device=self.device)
-            )
-            batch = (strokes, sequence, torch.sqrt(alpha), style_vector)
-
-            with torch.no_grad():
-                model_out, pen_lifts, _ = self(batch)
-
-            if diffusion_mode == "standard":
-                strokes = utils.standard_diffusion_step(
-                    strokes, model_out, beta, alpha, add_sigma=bool(i)
+        with torch.no_grad():
+            for i in track(reversed(range(beta_len))):
+                alpha = self.alpha[i] * torch.ones(
+                    (batch_size, 1, 1), device=self.device
                 )
-            else:
-                strokes = utils.new_diffusion_step(
+                beta = self.beta[i] * torch.ones((batch_size, 1, 1), device=self.device)
+                alpha_next = (
+                    self.alpha[i - 1]
+                    if i > 0
+                    else torch.tensor([1.0], device=self.device)
+                )
+                batch = (strokes, sequence, torch.sqrt(alpha), style_vector)
+
+                model_out, pen_lifts, _ = self.ema(batch) if self.use else self(batch)
+                strokes = utils.diffusion_step(
                     strokes, model_out, beta, alpha, alpha_next
                 )
 
-        pen_lifts = rearrange(torch.sigmoid(pen_lifts), "h w 1 -> h w")
         strokes = torch.cat([strokes, pen_lifts], dim=-1)
-        save_path = "handwriting.png"
 
         utils.generate_stroke_image(
             strokes.detach().cpu().numpy(), scale=1.0, save_path=save_path
