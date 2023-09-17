@@ -114,7 +114,7 @@ class ExponentialMovingAverage(nn.Module):
             self.copy_params_from_model_to_ema()
             self.initiated.data.copy_(torch.Tensor([True]))
 
-        self.update_moving_average(self.ema_model, self.__model)
+        self.update_moving_average()
 
     def get_current_decay(self) -> float:
         step = max(self.step.item() - self.update_after_step - 1, 0.0)
