@@ -1,17 +1,20 @@
 import math
 from typing import Tuple, Union
 
-import torch.nn as nn
-import torch.nn.functional as F
+import torch
 from einops import rearrange
-from torch import Tensor
+from torch import Tensor, nn as nn
+from torch.nn import functional as F
+
+from .encoder import PositionalEncoder
+from .utils import FeedForwardNetwork
 
 
 class PrepareForMultiHeadAttention(nn.Module):
     """
     _summary_
     """
-    
+
     def __init__(self, d_model: int, heads: int, *, bias: bool = True) -> None:
         """
         _summary_
@@ -25,7 +28,7 @@ class PrepareForMultiHeadAttention(nn.Module):
         bias : bool, optional
             _description_, by default True
         """
-        
+
         super().__init__()
 
         self.d_model = d_model
@@ -47,7 +50,7 @@ class PrepareForMultiHeadAttention(nn.Module):
         Tensor
             _description_
         """
-        
+
         x = self.linear(x)
 
         return self.split_heads(x)
@@ -66,7 +69,7 @@ class PrepareForMultiHeadAttention(nn.Module):
         Tensor
             _description_
         """
-        
+
         return rearrange(
             x,
             "b s (h d) -> b h s d",
@@ -80,7 +83,7 @@ class MultiHeadAttention(nn.Module):
     """
     _summary_
     """
-    
+
     def __init__(
         self,
         d_model: int,
@@ -106,7 +109,7 @@ class MultiHeadAttention(nn.Module):
         return_weights : bool, optional
             _description_, by default True
         """
-        
+
         super().__init__()
 
         self.d_model = d_model
@@ -142,7 +145,7 @@ class MultiHeadAttention(nn.Module):
         Union[Tuple[Tensor, Tensor], Tensor]
             _description_
         """
-        
+
         query = self.query(q)
         key = self.key(k)
         value = self.value(v)
@@ -198,7 +201,7 @@ class MultiHeadAttention(nn.Module):
         if mask is not None:
             scores += mask * -1e12
 
-        attention_weights = F.softmax(scores, dim=-1)
+        attention_weights = torch.softmax(scores, dim=-1)
 
         return attention_weights @ v, attention_weights
 
@@ -207,7 +210,7 @@ class AffineTransformLayer(nn.Module):
     """
     _summary_
     """
-    
+
     def __init__(
         self, in_features: int, out_features: int, channel_first_input: bool = False
     ) -> None:
@@ -259,3 +262,107 @@ class AffineTransformLayer(nn.Module):
             )
 
         return x * gammas + betas
+
+
+class AttentionBlock(nn.Module):
+    """
+    _summary_
+    """
+
+    def __init__(
+        self,
+        in_features: int,
+        d_model: int,
+        num_heads: int,
+        *,
+        drop_rate: float = 0.1,
+        pos_factor: int = 1,
+        swap_channel_layer: bool = True,
+    ) -> None:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        in_features: int
+            _description_
+        d_model : int
+            _description_
+        num_heads : int
+            _description_
+        drop_rate : float, optional
+            _description_, by default 0.1
+        pos_factor : int, optional
+            _description_, by default 1
+        swap_channel_layer : bool, optional
+            _description_, by default True
+        """
+
+        super().__init__()
+
+        self.swap_channel_layer = swap_channel_layer
+        self.text_pos = PositionalEncoder(2000, d_model)()
+        self.stroke_pos = PositionalEncoder(2000, d_model, pos_factor=pos_factor)()
+
+        self.dense_layer = nn.Linear(in_features, d_model)
+        self.layer_norm = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=False)
+        self.affine_0 = AffineTransformLayer(in_features // 12, d_model)
+
+        self.mha_0 = MultiHeadAttention(d_model, num_heads)
+        self.affine_1 = AffineTransformLayer(in_features // 12, d_model)
+
+        self.mha_1 = MultiHeadAttention(d_model, num_heads, return_weights=False)
+        self.affine_2 = AffineTransformLayer(in_features // 12, d_model)
+
+        self.ff_network = FeedForwardNetwork(d_model, d_model, hidden_size=d_model * 2)
+        self.dropout = nn.Dropout(drop_rate)
+        self.affine_3 = AffineTransformLayer(in_features // 12, d_model)
+
+    def forward(
+        self, x: Tensor, text: Tensor, sigma: Tensor, *, mask: Tensor
+    ) -> Tuple[Tensor, Tensor]:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        x : Tensor
+            _description_
+        text : Tensor
+            _description_
+        sigma : Tensor
+            _description_
+        mask : Tensor
+            _description_
+
+        Returns
+        -------
+        Tuple[Tensor, Tensor]
+            _description_
+        """
+        if self.text_pos.device != x.device:
+            self.text_pos = self.text_pos.to(x.device)
+            self.stroke_pos = self.stroke_pos.to(x.device)
+
+        text = self.dense_layer(F.silu(text))
+        text = self.affine_0(self.layer_norm(text), sigma)
+        text_pos = text + self.text_pos[:, : text.size(1)]
+
+        if self.swap_channel_layer:
+            x = rearrange(x, "b h w -> b w h")
+
+        x_pos = x + self.stroke_pos[:, : x.size(1)]
+        x_2, attention = self.mha_0(x_pos, text_pos, text, mask=mask)
+        x_2 = self.layer_norm(self.dropout(x_2))
+        x_2 = self.affine_1(x_2, sigma) + x
+
+        x_2_pos = x_2 + self.stroke_pos[:, : x.size(1)]
+        x_3 = self.mha_1(x_2_pos, x_2_pos, x_2)
+        x_3 = self.layer_norm(x_2 + self.dropout(x_3))
+        x_3 = self.affine_2(x_3, sigma)
+
+        x_4 = self.ff_network(x_3)
+        x_4 = self.dropout(x_4) + x_3
+        output = self.affine_3(self.layer_norm(x_4), sigma)
+
+        return output, attention

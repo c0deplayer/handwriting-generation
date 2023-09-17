@@ -17,52 +17,12 @@ from torch.optim.lr_scheduler import LRScheduler
 from data.tokenizer import Tokenizer
 from data.utils import get_image
 from . import utils
-from .attention import AffineTransformLayer, MultiHeadAttention
-from .cnn import ConvBlock, FeedForwardNetwork
-from .encoder import PositionalEncoder
+from .attention import AttentionBlock
+from .cnn import ConvBlock
 from .inv_sqrt_scheduler import InverseSqrtScheduler
 from .text_style import StyleExtractor, TextStyleEncoder
-
-
-class AttentionBlock(nn.Module):
-    """
-    _summary_
-    """
-
-    def __init__(
-        self,
-        in_features: int,
-        d_model: int,
-        num_heads: int,
-        *,
-        drop_rate: float = 0.1,
-        pos_factor: int = 1,
-        swap_channel_layer: bool = True,
-    ) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        in_features: int
-            _description_
-        d_model : int
-            _description_
-        num_heads : int
-            _description_
-        drop_rate : float, optional
-            _description_, by default 0.1
-        pos_factor : int, optional
-            _description_, by default 1
-        swap_channel_layer : bool, optional
-            _description_, by default True
-        """
-
-        super().__init__()
-
-        self.swap_channel_layer = swap_channel_layer
-        self.text_pos = PositionalEncoder(2000, d_model)()
-        self.stroke_pos = PositionalEncoder(2000, d_model, pos_factor=pos_factor)()
+from .utils import FeedForwardNetwork
+from ..ema import ExponentialMovingAverage
 
         self.dense_layer = nn.Linear(in_features, d_model)
         self.layer_norm = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=False)

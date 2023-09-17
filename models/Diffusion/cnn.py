@@ -3,14 +3,14 @@ import torch.nn.functional as F
 from einops import rearrange
 from torch import Tensor
 
-from models.Diffusion.attention import AffineTransformLayer
+from .attention import AffineTransformLayer
 
 
 class ConvBlock(nn.Module):
     """
     _summary_
     """
-    
+
     def __init__(
         self,
         in_features: int,
@@ -85,78 +85,16 @@ class ConvBlock(nn.Module):
         """
 
         x_skip = self.conv_skip(x)
-        # TODO: Swish vs SeLU vs ReLU
-        x = self.conv_0(F.selu(x))
+        x = self.conv_0(F.silu(x))
         x = self.dropout(self.affine_0(x, alpha))
 
-        x = self.conv_1(F.selu(x))
+        x = self.conv_1(F.silu(x))
         x = self.dropout(self.affine_1(x, alpha))
 
         x = rearrange(x, "b h w -> b w h")
-        x = self.fc(F.selu(x))
+        x = self.fc(F.silu(x))
         x = self.dropout(self.affine_2(x, alpha))
         x = rearrange(x, "b h w -> b w h")
 
         x += x_skip
         return x
-
-
-class FeedForwardNetwork(nn.Module):
-    """
-    _summary_
-    """
-    
-    def __init__(
-        self,
-        in_features: int,
-        out_features: int,
-        *,
-        hidden_size: int = 768,
-        act_before: bool = True,
-    ) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        in_features : int
-            _description_
-        out_features : int
-            _description_
-        hidden_size : int, optional
-            _description_, by default 768
-        act_before : bool, optional
-            _description_, by default True
-        """
-        
-        super().__init__()
-        self.act_before = act_before
-
-        # TODO: Swish vs SeLU vs ReLU
-        ff_network = [
-            nn.Linear(in_features, hidden_size),
-            nn.SELU(),
-            nn.Linear(hidden_size, out_features),
-        ]
-
-        if act_before:
-            ff_network.insert(0, nn.SELU())
-
-        self.ff_net = nn.Sequential(*ff_network)
-
-    def forward(self, x: Tensor) -> Tensor:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        x : Tensor
-            _description_
-
-        Returns
-        -------
-        Tensor
-            _description_
-        """
-        
-        return self.ff_net(x)

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from einops import rearrange, repeat
-from torch import Tensor
+from torch import Tensor, nn as nn
 
 
 def reshape_up(x: Tensor, *, factor: int = 2) -> Tensor:
@@ -23,7 +23,7 @@ def reshape_up(x: Tensor, *, factor: int = 2) -> Tensor:
     Tensor
         _description_
     """
-    
+
     return rearrange(x, "b h (f w) -> b (h f) w", f=factor)
 
 
@@ -41,7 +41,7 @@ def get_beta_set(*, device: torch.device) -> Tensor:
     Tensor
         _description_
     """
-    
+
     start = 1e-5
     end = 0.4
     num_steps = 60
@@ -70,6 +70,10 @@ def get_alphas(batch_size: int, alpha_set: Tensor) -> Tensor:
     
     alpha_indices = torch.randint(
         low=0, high=(len(alpha_set) - 1), size=(batch_size, 1), dtype=torch.int64
+        low=0,
+        size=(batch_size, 1),
+        dtype=torch.int64,
+        device=device,
     )
     lower_alphas = alpha_set[alpha_indices]
     upper_alphas = alpha_set[alpha_indices + 1]
@@ -191,7 +195,7 @@ def generate_stroke_image(
     plt.Figure
         _description_
     """
-    
+
     strokes = strokes.squeeze()
     positions, pen_lifts = np.cumsum(strokes, axis=0).T[:2], strokes[:, 2].round()
 
@@ -214,3 +218,63 @@ def generate_stroke_image(
 
     plt.close()
     return generated_image
+
+
+class FeedForwardNetwork(nn.Module):
+    """
+    _summary_
+    """
+
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        *,
+        hidden_size: int = 768,
+        act_before: bool = True,
+    ) -> None:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        in_features : int
+            _description_
+        out_features : int
+            _description_
+        hidden_size : int, optional
+            _description_, by default 768
+        act_before : bool, optional
+            _description_, by default True
+        """
+
+        super().__init__()
+        self.act_before = act_before
+
+        ff_network = [
+            nn.Linear(in_features, hidden_size),
+            nn.SiLU(),
+            nn.Linear(hidden_size, out_features),
+        ]
+
+        if act_before:
+            ff_network.insert(0, nn.SiLU())
+
+        self.ff_net = nn.Sequential(*ff_network)
+
+    def forward(self, x: Tensor) -> Tensor:
+        """
+        _summary_
+
+        Parameters
+        ----------
+        x : Tensor
+            _description_
+
+        Returns
+        -------
+        Tensor
+            _description_
+        """
+
+        return self.ff_net(x)

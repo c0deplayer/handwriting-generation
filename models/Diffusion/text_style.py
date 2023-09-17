@@ -5,8 +5,7 @@ from torch import Tensor
 from torchvision import models
 
 from .attention import AffineTransformLayer, MultiHeadAttention
-from .cnn import FeedForwardNetwork
-from .utils import reshape_up
+from .utils import reshape_up, FeedForwardNetwork
 
 
 class StyleExtractor(nn.Module):
