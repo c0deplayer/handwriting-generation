@@ -6,7 +6,6 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 import lightning.pytorch as pl
-import numpy as np
 import torch
 import yaml
 from lightning.pytorch.callbacks import (
@@ -18,12 +17,12 @@ from lightning.pytorch.callbacks import (
 from configs.config import ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion
 from data import utils
 from data.dataset import IAMDataset, IAMonDataset, DataModule
-from models.Diffusion.model import DiffusionModel
+from models.Diffusion.model import DiffusionWrapper
 from models.LatentDiffusion.model import LatentDiffusionModel
 from models.RNN.model import RNNModel
 
 MODELS = {
-    "Diffusion": DiffusionModel,
+    "Diffusion": DiffusionWrapper,
     "RNN": RNNModel,
     "LatentDiffusion": LatentDiffusionModel,
 }
@@ -85,8 +84,23 @@ def cli_main():
         help="Flag for saving preprocessed dataset to H5 file",
         action="store_true",
     )
-    parser.add_argument("--generate", help="...", action="store_true")
-    parser.add_argument("--train", help="...", action="store_true")
+    parser.add_argument("--generate", help="Generate handwriting", action="store_true")
+    parser.add_argument(
+        "-t",
+        "--text",
+        help="Text to generate",
+        type=str,
+        default="Handwriting Synthesis in Python",
+    )
+    parser.add_argument(
+        "-w",
+        "--writer",
+        help="Writer style. If not provided, the default writer is selected randomly",
+        type=int,
+        default=random.randint(0, 339),
+    )
+
+    parser.add_argument("--train", help="Train selected model", action="store_true")
 
     return parser.parse_args()
 
@@ -153,6 +167,7 @@ def prepare_data():
 
 def train_model():
     global dataset
+    # * ModelCheckpoint to save 9 (most of the time) latest models from epochs *
     kwargs_trainer = dict(
         accelerator=config.device,
         default_root_dir=config.checkpoint_path,
@@ -163,21 +178,24 @@ def train_model():
             # EarlyStopping(monitor="val_loss", patience=25),
             ModelCheckpoint(
                 dirpath=config.checkpoint_path,
-                monitor="val_loss",
+                monitor="loss",
                 filename="{epoch}-{loss:.2f}-{val_loss:.2f}",
-                save_top_k=10,
+                save_top_k=9,
             ),
         ],
     )
 
     if args.config == "Diffusion":
         kwargs_model = dict(
-            num_layers=config.num_layers,
-            c1=config.channels,
-            c2=config.channels * 3 // 2,
-            c3=config.channels * 2,
-            drop_rate=config.drop_rate,
-            vocab_size=config.vocab_size,
+            diffusion_params=dict(
+                num_layers=config.num_layers,
+                c1=config.channels,
+                c2=config.channels * 3 // 2,
+                c3=config.channels * 2,
+                drop_rate=config.drop_rate,
+                vocab_size=config.vocab_size,
+            ),
+            use_ema=config.use_ema,
         )
 
         kwargs_trainer.update(
@@ -223,9 +241,6 @@ def train_model():
 
     # * Only for university servers that have two GPUs *
     if config.device == "cuda" and args.remote:
-        # * Only for A100 GPU on university server *
-        # torch.set_float32_matmul_precision("medium")
-
         kwargs_trainer["devices"] = [1]
 
     set_random_seed()
@@ -244,7 +259,17 @@ def generate_handwriting() -> None:
         map_location=torch.device(config.device),
     )
     model.eval()
-    model.generate("Handwriting Synthesis", vocab=config.vocab)
+
+    if args.config == "LatentDiffusion":
+        print(f"Selected writer id: {args.writer}")
+        model.generate(
+            args.text,
+            vocab=config.vocab,
+            writer_id=args.writer,
+            save_path="handwriting.png",
+        )
+    else:
+        model.generate(args.text, save_path="handwriting.png", vocab=config.vocab)
 
 
 if __name__ == "__main__":
