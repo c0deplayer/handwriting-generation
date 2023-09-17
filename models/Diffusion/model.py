@@ -1,21 +1,23 @@
 import os
 from pathlib import Path
-from typing import Tuple, Dict, Union
+from typing import Tuple, Dict, Union, Any
 
 import lightning.pytorch as pl
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from einops import rearrange
+from einops import rearrange, reduce
 from matplotlib import pyplot as plt
+from pytorch_lightning.utilities.types import STEP_OUTPUT
 from rich.progress import track
 from torch import Tensor
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
+from torchvision import transforms
 
 from data.tokenizer import Tokenizer
-from data.utils import get_image
+from data.utils import get_image, get_encoded_text_with_one_hot_encoding
 from . import utils
 from .attention import AttentionBlock
 from .cnn import ConvBlock
@@ -24,79 +26,15 @@ from .text_style import StyleExtractor, TextStyleEncoder
 from .utils import FeedForwardNetwork
 from ..ema import ExponentialMovingAverage
 
-        self.dense_layer = nn.Linear(in_features, d_model)
-        self.layer_norm = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=False)
-        self.affine_0 = AffineTransformLayer(in_features // 12, d_model)
 
-        self.mha_0 = MultiHeadAttention(d_model, num_heads)
-        self.affine_1 = AffineTransformLayer(in_features // 12, d_model)
-
-        self.mha_1 = MultiHeadAttention(d_model, num_heads)
-        self.affine_2 = AffineTransformLayer(in_features // 12, d_model)
-
-        self.ff_network = FeedForwardNetwork(d_model, d_model, hidden_size=d_model * 2)
-        self.dropout = nn.Dropout(drop_rate)
-        self.affine_3 = AffineTransformLayer(in_features // 12, d_model)
-
-    def forward(
-        self, x: Tensor, text: Tensor, sigma: Tensor, *, mask: Tensor
-    ) -> Tuple[Tensor, Tensor]:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        x : Tensor
-            _description_
-        text : Tensor
-            _description_
-        sigma : Tensor
-            _description_
-        mask : Tensor
-            _description_
-
-        Returns
-        -------
-        Tuple[Tensor, Tensor]
-            _description_
-        """
-        if self.text_pos.device != x.device:
-            self.text_pos = self.text_pos.to(x.device)
-            self.stroke_pos = self.stroke_pos.to(x.device)
-
-        # TODO: Swish vs SeLU vs ReLU
-        text = self.dense_layer(F.selu(text))
-        text = self.affine_0(self.layer_norm(text), sigma)
-        text_pos = text + self.text_pos[:, : text.size(1)]
-
-        # text_mask = rearrange(text_mask, "b h w c -> b (h w c)")
-        if self.swap_channel_layer:
-            x = rearrange(x, "b h w -> b w h")
-
-        x_pos = x + self.stroke_pos[:, : x.size(1)]
-        x_2, attention = self.mha_0(x_pos, text_pos, text, mask=mask)
-        x_2 = self.layer_norm(self.dropout(x_2))
-        x_2 = self.affine_1(x_2, sigma) + x
-
-        x_2_pos = x_2 + self.stroke_pos[:, : x.size(1)]
-        x_3, _ = self.mha_1(x_2_pos, x_2_pos, x_2)
-        x_3 = self.layer_norm(x_2 + self.dropout(x_3))
-        x_3 = self.affine_2(x_3, sigma)
-
-        x_4 = self.ff_network(x_3)
-        x_4 = self.dropout(x_4) + x_3
-        output = self.affine_3(self.layer_norm(x_4), sigma)
-
-        return output, attention
-
-
-class DiffusionModel(pl.LightningModule):
+class DiffusionModel(nn.Module):
     """
     _summary_
     """
 
     def __init__(
         self,
+        ab: Tuple[Tensor, Tensor] = None,
         num_layers: int = 2,
         c1: int = 128,
         c2: int = 192,
@@ -125,13 +63,16 @@ class DiffusionModel(pl.LightningModule):
 
         super().__init__()
 
-        self.beta = utils.get_beta_set(device=self.device)
-        self.alpha = torch.cumprod(1 - self.beta, dim=0)
+        if ab is not None:
+            self.alpha, self.beta = ab
+        else:
+            self.beta = utils.get_beta_set(device=self.device)
+            self.alpha = torch.cumprod(1 - self.beta, dim=0)
 
         self.sigma_ff_network = FeedForwardNetwork(1, c1 // 4, hidden_size=2048)
         self.text_style_encoder = TextStyleEncoder(c1 * 2, c2 * 2, vocab_size, c2 * 4)
 
-        self.input_dense = nn.LazyLinear(c1)
+        self.input_dense = nn.Linear(2, c1)
         self.enc_0 = ConvBlock(c1, c1, c1)
         self.avg_pool = nn.AvgPool1d(2)
 
@@ -178,9 +119,7 @@ class DiffusionModel(pl.LightningModule):
         self.dec_0 = ConvBlock(c1, c2, c1)
 
         self.output_dense = nn.Linear(c1, 2)
-        self.pen_lifts_dense = nn.Linear(c1, 1)
-
-        self.save_hyperparameters()
+        self.pen_lifts_dense = nn.Sequential(nn.Linear(c1, 1), nn.Sigmoid())
 
     def forward(self, batch: Tuple[Tensor, ...]) -> Tuple[Tensor, Tensor, Tensor]:
         """
@@ -258,6 +197,47 @@ class DiffusionModel(pl.LightningModule):
         # noinspection PyUnboundLocalVariable
         return output, pen_lifts, attention
 
+
+class DiffusionWrapper(pl.LightningModule):
+    def __init__(
+        self, diffusion_params: Dict[str, Any], *, use_ema: bool = True
+    ) -> None:
+        super().__init__()
+
+        self.beta = utils.get_beta_set(device=self.device)
+        self.alpha = torch.cumprod(1 - self.beta, dim=0)
+        self.use_ema = use_ema
+
+        self.diffusion_model = DiffusionModel(
+            (self.alpha, self.beta), **diffusion_params
+        )
+
+        if use_ema:
+            self.ema = ExponentialMovingAverage(
+                self.diffusion_model,
+                beta=0.995,
+                update_after_step=10000,
+                update_every=10,
+                inv_gamma=1.0,
+                power=0.8,
+            )
+        else:
+            self.ema = None
+
+        self.save_hyperparameters()
+
+    def on_train_batch_end(
+        self, outputs: STEP_OUTPUT, batch: Tuple[Tensor, ...], batch_idx: int
+    ) -> None:
+        if self.use_ema:
+            self.ema.update()
+
+    def on_fit_start(self) -> None:
+        pl.seed_everything(seed=42)
+
+    def forward(self, batch: Tuple[Tensor, ...]) -> Tuple[Tensor, Tensor, Tensor]:
+        return self.diffusion_model(batch)
+
     def training_step(
         self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int
     ) -> Tensor:
@@ -267,9 +247,7 @@ class DiffusionModel(pl.LightningModule):
         alphas = utils.get_alphas(strokes.size(0), self.alpha, device=strokes.device)
         eps = torch.randn_like(strokes)
 
-        strokes_perturbed = torch.sqrt(alphas) * strokes
-
-        strokes_perturbed += torch.sqrt(1 - alphas) * eps
+        strokes_perturbed = torch.sqrt(alphas) * strokes + torch.sqrt(1 - alphas) * eps
 
         model_batch = (strokes_perturbed, text, torch.sqrt(alphas), style)
         strokes_pred, pen_lifts_pred, _ = self(model_batch)
@@ -290,16 +268,14 @@ class DiffusionModel(pl.LightningModule):
         alphas = utils.get_alphas(strokes.size(0), self.alpha, device=strokes.device)
         eps = torch.randn_like(strokes)
 
-        strokes_perturbed = torch.sqrt(alphas) * strokes
-
-        strokes_perturbed += torch.sqrt(1 - alphas) * eps
+        strokes_perturbed = torch.sqrt(alphas) * strokes + torch.sqrt(1 - alphas) * eps
         model_batch = (strokes_perturbed, text, torch.sqrt(alphas), style)
 
         with torch.no_grad():
             strokes_pred, pen_lifts_pred, _ = self(model_batch)
 
-        loss_batch = (eps, strokes_pred, pen_lifts, pen_lifts_pred, alphas)
-        loss = self.loss(loss_batch)
+            loss_batch = (eps, strokes_pred, pen_lifts, pen_lifts_pred, alphas)
+            loss = self.loss(loss_batch)
 
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
 
@@ -308,9 +284,9 @@ class DiffusionModel(pl.LightningModule):
     def configure_optimizers(self) -> Dict[str, Union[Optimizer, LRScheduler]]:
         optimizer = torch.optim.AdamW(
             self.parameters(),
-            lr=1e-3,
+            lr=1e-4,
             betas=(0.9, 0.98),
-            weight_decay=1e-4,
+            weight_decay=1e-5,
         )
         lr_scheduler = InverseSqrtScheduler(
             optimizer=optimizer,
