@@ -60,8 +60,6 @@ class DataModule(pl.LightningDataModule):
     # noinspection PyCallingNonCallable
     def setup(self, stage: str) -> None:
         if stage == "fit":
-            # TODO: Avoid creating two separate dataset like that or pass writers dict to val_dataset to avoid
-            # TODO: mixing writer ids (writer_id_train_0 != writer_id_val_0)
             if isinstance(self.__config, ConfigLatentDiffusion):
                 self.train_dataset = self.dataset(
                     config=self.__config,
@@ -232,11 +230,9 @@ class IAMonDataset(Dataset):
                     raw_text, self.tokenizer, self.max_text_len
                 )
 
-                image, original_image = utils.get_image(
-                    path_file_tif, self.img_width, self.img_height
-                )
+                image = utils.get_image(path_file_tif, self.img_width, self.img_height)
 
-                if strokes is None or original_image.size[0] > self.img_width:
+                if strokes is None or image is None:
                     continue
 
                 writer_image = torchvision.transforms.PILToTensor()(image).to(
@@ -371,7 +367,7 @@ class IAMDataset(Dataset):
 
             img_path = raw_data_path / f"words/{f_folder}/{s_folder}/{image_id}.png"
 
-            image, _ = utils.get_image(
+            image = utils.get_image(
                 img_path, self.img_width, self.img_height, latent=True
             )
 

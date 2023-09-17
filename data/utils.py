@@ -151,7 +151,7 @@ def __combine_strokes(strokes: np.ndarray, n: int) -> np.ndarray:
 
 def get_image(
     path: Path, width: int, height: int, *, latent: bool = False
-) -> Union[Tuple[Image, Image], Tuple[None, None]]:
+) -> Union[Image, None]:
     """
     _summary_
 
@@ -168,7 +168,7 @@ def get_image(
 
     Returns
     -------
-    Union[Tuple[Image, Image], Tuple[None, None]]
+    Union[Image, None]
         _description_
 
     Raises
@@ -180,34 +180,35 @@ def get_image(
     try:
         img = ImageModule.open(path)
     except PIL.UnidentifiedImageError:
-        return None, None
+        return None
     except FileNotFoundError as e:
         raise f"The image was not found: {path}" from e
 
-    if not latent:
+    if latent:
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+    else:
         if img.mode != "L":
             img = img.convert("L")
 
-        # noinspection PyTypeChecker
-        img = __remove_whitespaces(np.array(img).astype("uint8"), threshold=127)
-        img = ImageModule.fromarray(img, mode="L")
+        bbox = ImageOps.invert(img).getbbox()
+        img = img.crop(bbox)
 
-        w, h = img.size
-        img = img.resize(size=(w * height // h, height), resample=ImageModule.BILINEAR)
+    w, h = img.size
 
-    else:
-        if img.mode != "RGB":
-            img = img.convert("RGB")
+    img = img.resize(size=(w * height // h, height), resample=ImageModule.LANCZOS)
+    w, h = img.size
 
-        w, h = img.size
+    if w > width:
+        img = img.resize(size=(width, height), resample=ImageModule.LANCZOS)
 
-        img = img.resize(size=(w * height // h, height), resample=ImageModule.LANCZOS)
-        w, h = img.size
-
-        if w > width:
-            img = img.resize(size=(width, height), resample=ImageModule.LANCZOS)
-
-    return __pad_image(img, width, height)
+    return ImageOps.pad(
+        image=img,
+        method=ImageModule.LANCZOS,
+        size=(width, height),
+        color="white",
+        centering=(0, 0),
+    )
 
 
 def get_encoded_text_with_one_hot_encoding(
@@ -249,32 +250,6 @@ def get_encoded_text_with_one_hot_encoding(
     return one_hot.numpy(), text
 
 
-def __remove_whitespaces(img: np.array, *, threshold: int) -> np.array:
-    """
-    _summary_
-
-    Parameters
-    ----------
-    img : np.array
-        _description_
-    threshold : int
-        _description_
-
-    Returns
-    -------
-    np.array
-        _description_
-    """
-
-    row_mins = np.amin(img, axis=1)
-    col_mins = np.amin(img, axis=0)
-
-    rows = np.where(row_mins < threshold)[0]
-    cols = np.where(col_mins < threshold)[0]
-
-    return img[rows[0] : rows[-1], cols[0] : cols[-1]]
-
-
 def __pad_strokes(
     strokes: np.array, max_length: int, *, fill_value: float = 0
 ) -> Union[np.array, None]:
@@ -309,31 +284,6 @@ def __pad_strokes(
         padded_strokes = strokes
 
     return padded_strokes
-
-
-def __pad_image(img: Image, width: int, height: int) -> Tuple[Image, Image]:
-    """
-    _summary_
-
-    Parameters
-    ----------
-    img : Image
-        _description_
-    width : int
-        _description_
-    height : int
-        _description_
-
-    Returns
-    -------
-    Tuple[Image, Image]
-        _description_
-    """
-
-    if img.size[0] > width:
-        return img, img
-    else:
-        return ImageOps.pad(image=img, size=(width, height), color="white"), img
 
 
 def get_max_seq_len(strokes_path: Path) -> int:
