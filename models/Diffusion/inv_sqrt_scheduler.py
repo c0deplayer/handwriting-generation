@@ -8,7 +8,7 @@ class InverseSqrtScheduler(LRScheduler):
     """
     _summary_
     """
-    
+
     def __init__(
         self,
         optimizer: Optimizer,
@@ -61,7 +61,8 @@ class InverseSqrtScheduler(LRScheduler):
 
         super().__init__(optimizer, last_epoch, verbose)
 
-    def step(self, epoch: int = None) -> float:
+    # noinspection PyUnresolvedReferences,PyProtectedMember
+    def step(self, epoch: int = None) -> None:
         """
         _summary_
 
@@ -75,17 +76,10 @@ class InverseSqrtScheduler(LRScheduler):
         float
             _description_
         """
-        
-        if self._step_count == 0:
-            self._step_count += 1
-            # noinspection PyProtectedMember,PyUnresolvedReferences
-            self.optimizer._step_count += 1
-
-            return self.get_lr()
+        self._step_count += 1
+        self.optimizer._step_count += 1
 
         self._last_lr = self.update_lr()
-
-        return self._last_lr
 
     def get_last_lr(self) -> float:
         """
@@ -98,7 +92,7 @@ class InverseSqrtScheduler(LRScheduler):
         """
         _summary_
         """
-        
+
         for g in self.optimizer.param_groups:
             return g["lr"]
 
@@ -106,7 +100,7 @@ class InverseSqrtScheduler(LRScheduler):
         """
         _summary_
         """
-        
+
         return (self.d_model ** (-0.5)) * min(
             self._step_count ** (-0.5),
             self._step_count * self.n_warmup_steps ** (-1.5),
@@ -134,7 +128,7 @@ class InverseSqrtScheduler(LRScheduler):
         epoch : int, optional
             _description_, by default None
         """
-        
+
         if is_verbose:
             if epoch is None:
                 print(f"Learning rate: {group:.4e} --> {lr:.4e}")
@@ -147,7 +141,6 @@ class InverseSqrtScheduler(LRScheduler):
             group["lr"] = lr
 
     def update_lr(self) -> float:
-        self._step_count += 1
         lr = self.lr_mul * self.get_lr_scale()
         self.set_lr(self.optimizer, lr)
 
