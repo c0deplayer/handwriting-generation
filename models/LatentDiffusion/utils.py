@@ -1,10 +1,9 @@
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, List
 
-import cv2
-import numpy as np
 import torch
 import torchvision.transforms
+from PIL import Image as ImageMethod
 from PIL.Image import Image
 from einops import rearrange
 from torch import nn, Tensor
@@ -16,7 +15,7 @@ class GroupNorm32(nn.GroupNorm):
     """
     _summary_
     """
-    
+
     def forward(self, x: Tensor) -> Tensor:
         return super().forward(x.float()).type(x.dtype)
 
@@ -25,7 +24,7 @@ class FeedForwardNetwork(nn.Module):
     """
     _summary_
     """
-    
+
     def __init__(
         self,
         d_model: int,
@@ -48,7 +47,7 @@ class FeedForwardNetwork(nn.Module):
         dropout : float, optional
             _description_, by default 0.0
         """
-        
+
         super().__init__()
 
         if d_out is None:
@@ -84,12 +83,12 @@ def noise_image(
     Tuple[Tensor, Tensor]
         _description_
     """
-    
+
     sqrt_alpha_bar = rearrange(torch.sqrt(alpha_bar[time_step]), "v -> v 1 1 1")
     sqrt_one_minus_alpha_bar = rearrange(
         torch.sqrt(1 - alpha_bar[time_step]), "v -> v 1 1 1"
     )
-    
+
     noise = torch.randn_like(x)
 
     return sqrt_alpha_bar * x + sqrt_one_minus_alpha_bar * noise, noise
@@ -133,9 +132,64 @@ def save_image(image: Tensor, path: Path) -> None:
     path : Path
         _description_
     """
-    
-    image = rearrange(image, "1 h w c -> h w c")
 
-    img = torchvision.transforms.ToPILImage()(image)
-    img = __crop_whitespaces(img)
-    img.save(path)
+    if image.size(0) == 1:
+        image = image[0]
+        image = rearrange(image, "1 h w c -> h w c")
+
+        img = torchvision.transforms.ToPILImage()(image)
+        img = __crop_whitespaces(img)
+        img.save(path)
+    else:
+        images = list(image)
+        images = [torchvision.transforms.ToPILImage()(img) for img in images]
+        images = [__crop_whitespaces(img) for img in images]
+
+        # TODO: Try to improve the combining of images so that the words are at a similar height
+        #       (for example, the word "quick" is higher than the end of the word "the")
+        combined_image = combine_images_with_space(images)
+        combined_image.save(path)
+
+
+def combine_images_with_space(
+    images: List[Image],
+    *,
+    spacing: int = 20,
+) -> Image:
+    """
+    Combine multiple images with a specified spacing between them.
+
+    Parameters
+    ----------
+    images : List[Image]
+        A list of PIL Images to combine.
+    spacing : int, optional
+        The spacing (in pixels) between the images, by default 10.
+
+    Returns
+    -------
+    Image
+        The combined PIL Image.
+    """
+
+    if not isinstance(images, list):
+        raise TypeError(f"Expected images to be a list, got {type(images)}")
+    elif not images:
+        raise ValueError("Input image list is empty")
+
+    total_width, total_height = images[0].size
+    bg_color = images[0].getextrema()[1]
+
+    for image in images[1:]:
+        w, h = image.size
+        total_width += w + spacing
+        total_height = max(total_height, h)
+
+    combined_image = ImageMethod.new("L", (total_width, total_height), bg_color)
+
+    x_offset = 0
+    for img in images:
+        combined_image.paste(img, (x_offset, 0))
+        x_offset += img.width + spacing
+
+    return combined_image

@@ -86,7 +86,7 @@ class DiffusionWrapper(nn.Module):
     def generate_image_noise(
         self,
         beta_alpha: Tuple[Tensor, Tensor, Tensor],
-        n: int,
+        batch_size: int,
         writer_id: Union[Tensor, Tuple[int, int]],
         word: Tensor,
         n_steps: int,
@@ -102,7 +102,7 @@ class DiffusionWrapper(nn.Module):
         ----------
         beta_alpha : Tuple[Tensor, Tensor, Tensor]
             _description_
-        n : int
+        batch_size : int
             _description_
         writer_id : Union[Tensor, Tuple[int, int]]
             _description_
@@ -131,13 +131,15 @@ class DiffusionWrapper(nn.Module):
 
         with torch.no_grad():
             x = torch.randn(
-                (n, 4, self.img_size[0] // 8, self.img_size[1] // 8),
+                (batch_size, 4, self.img_size[0] // 8, self.img_size[1] // 8),
                 device=word.device,
             )
 
             p_bar = track(reversed(range(1, n_steps)))
             for i in p_bar:
-                time_step = torch.ones(n, dtype=torch.long, device=word.device) * i
+                time_step = (
+                    torch.ones(batch_size, dtype=torch.long, device=word.device) * i
+                )
                 predicted_noise = self(
                     x,
                     time_step,
@@ -347,37 +349,40 @@ class LatentDiffusionModel(pl.LightningModule):
         pl.seed_everything(seed=42)
 
         words = text_line.split(" ")
+        words_n = []
         tokenizer = Tokenizer(vocab)
+
         if isinstance(writer_id, int):
-            writer_id = torch.as_tensor([writer_id], device=self.device)
+            writer_id = torch.as_tensor([writer_id] * len(words), device=self.device)
         elif not isinstance(writer_id, tuple):
             raise TypeError(
                 f"Expected writer_id to be int or tuple, got {type(writer_id)}"
             )
 
-        # TODO: Combine images into one image to create a line of text
         for word in words:
             _, word_enc = get_encoded_text_with_one_hot_encoding(
                 word, tokenizer=tokenizer, max_len=8
             )
-            word_tensor = torch.as_tensor(
-                word_enc, dtype=torch.long, device=self.device
-            )
-
+            word_tensor = torch.tensor(word_enc, dtype=torch.long, device=self.device)
             word_tensor = rearrange(word_tensor, "v -> 1 v")
 
-            x = self.ema.model.generate_image_noise(
-                beta_alpha=(self.beta, self.alpha, self.alpha_bar),
-                n=len(writer_id),
-                writer_id=writer_id,
-                word=word_tensor,
-                n_steps=self.n_steps,
-                interpolation=interpolation,
-                mix_rate=mix_rate,
-            )
+            words_n.append(word_tensor)
 
-            x /= 0.18215
-            image = self.autoencoder.decode(x.float()).sample
+        words_t = torch.cat(words_n, dim=0)
 
-            image = (image / 2 + 0.5).clamp(0, 1).cpu()
-            utils.save_image(image, save_path)
+        x = self.ema.model.generate_image_noise(
+            beta_alpha=(self.beta, self.alpha, self.alpha_bar),
+            batch_size=len(words_t),
+            writer_id=writer_id,
+            word=words_t,
+            n_steps=self.n_steps,
+            interpolation=interpolation,
+            mix_rate=mix_rate,
+        )
+
+        x /= 0.18215
+        image = self.autoencoder.decode(x.float()).sample
+
+        image = torch.clamp((image / 2 + 0.5), min=0, max=1).cpu()
+
+        utils.save_image(image, save_path)
