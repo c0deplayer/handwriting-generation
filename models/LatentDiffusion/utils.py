@@ -108,17 +108,12 @@ def __crop_whitespaces(image: Image) -> Image:
     Image
         _description_
     """
-    
-    img_gray = image.convert("L")
-    # noinspection PyTypeChecker
-    img_gray = np.array(img_gray)
-    _, threshold = cv2.threshold(
-        img_gray, thresh=0, maxval=255, type=cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
-    )
 
-    cords = cv2.findNonZero(threshold)
-    x, y, w, h = cv2.boundingRect(cords)
-    return image.crop((x, y, x + w, y + h))
+    img_gray = image.convert("L")
+    bbox = img_gray.point(lambda p: p < 128 and 255).getbbox()
+    image = img_gray.crop(bbox)
+
+    return image
 
 
 def save_image(image: Tensor, path: Path) -> None:
