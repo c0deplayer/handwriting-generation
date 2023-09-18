@@ -405,7 +405,9 @@ class DiffusionWrapper(pl.LightningModule):
                 )
                 batch = (strokes, sequence, torch.sqrt(alpha), style_vector)
 
-                model_out, pen_lifts, _ = self.ema(batch) if self.use else self(batch)
+                model_out, pen_lifts, _ = (
+                    self.ema(batch) if self.use_ema else self(batch)
+                )
                 strokes = utils.diffusion_step(
                     strokes, model_out, beta, alpha, alpha_next
                 )
