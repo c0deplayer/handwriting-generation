@@ -372,7 +372,7 @@ class LatentDiffusionModel(pl.LightningModule):
 
         x = self.ema.model.generate_image_noise(
             beta_alpha=(self.beta, self.alpha, self.alpha_bar),
-            batch_size=len(words_t),
+            batch_size=words_t.size(0),
             writer_id=writer_id,
             word=words_t,
             n_steps=self.n_steps,
