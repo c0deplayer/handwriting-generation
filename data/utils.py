@@ -185,11 +185,9 @@ def get_image(
         raise f"The image was not found: {path}" from e
 
     if latent:
-        if img.mode != "RGB":
-            img = img.convert("RGB")
+        img = img.convert("RGB")
     else:
-        if img.mode != "L":
-            img = img.convert("L")
+        img = img.convert("L")
 
         bbox = ImageOps.invert(img).getbbox()
         img = img.crop(bbox)
@@ -239,7 +237,7 @@ def get_encoded_text_with_one_hot_encoding(
     text_len = len(text)
     max_len += 2
 
-    if text_len <= max_len:
+    if text_len < max_len:
         padded_text = np.full((max_len - text_len,), pad_value)
         # noinspection PyTypeChecker
         text = np.concatenate((text, padded_text))
