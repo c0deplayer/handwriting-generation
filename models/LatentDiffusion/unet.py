@@ -72,7 +72,7 @@ class UNetModel(nn.Module):
         input_block_channels = [channels]
         channels_list = [channels * m for m in channel_multipliers]
 
-        input_block_channels = self.__init_input_blocks(
+        input_block_channels = self.__init_input_blocks__(
             attention_levels,
             channels,
             channels_list,
@@ -87,11 +87,11 @@ class UNetModel(nn.Module):
             tf_layers,
         )
 
-        self.__init_middle_blocks(
+        self.__init_middle_blocks__(
             channels, d_cond, d_time_emb, dropout, heads, tf_layers
         )
 
-        self.__init_output_blocks(
+        self.__init_output_blocks__(
             attention_levels,
             channels,
             channels_list,
@@ -111,7 +111,7 @@ class UNetModel(nn.Module):
             nn.Conv2d(channels, out_channels, kernel_size=3, padding=1),
         )
 
-    def __init_input_blocks(
+    def __init_input_blocks__(
         self,
         attention_levels: Tuple[int],
         channels: int,
@@ -166,7 +166,7 @@ class UNetModel(nn.Module):
 
         return input_block_channels
 
-    def __init_middle_blocks(
+    def __init_middle_blocks__(
         self,
         channels: int,
         d_cond: int,
@@ -188,7 +188,7 @@ class UNetModel(nn.Module):
             ResBlock(channels, d_time_emb),
         )
 
-    def __init_output_blocks(
+    def __init_output_blocks__(
         self,
         attention_levels: Tuple[int],
         channels: int,
