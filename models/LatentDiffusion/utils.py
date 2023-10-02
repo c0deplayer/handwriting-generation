@@ -4,7 +4,7 @@ from typing import Tuple, List, Union
 
 import torch
 import torchvision.transforms
-from PIL import Image as ImageMethod
+from PIL import Image as ImageMethod, ImageColor
 from PIL.Image import Image
 from einops import rearrange
 from torch import nn, Tensor
@@ -118,7 +118,7 @@ def __crop_whitespaces(image: Image) -> Image:
     return image
 
 
-def generate_image(image: Tensor, path: Union[Path, None]) -> Image:
+def generate_image(image: Tensor, path: Union[Path, None], *, color: str) -> Image:
     """
     _summary_
 
@@ -127,6 +127,8 @@ def generate_image(image: Tensor, path: Union[Path, None]) -> Image:
     image : Tensor
         _description_
     path : Path
+        _description_
+    color : str
         _description_
     """
 
@@ -138,6 +140,7 @@ def generate_image(image: Tensor, path: Union[Path, None]) -> Image:
 
         img = torchvision.transforms.ToPILImage()(image)
         img = __crop_whitespaces(img)
+        img = __change_image_colors(img, color=color)
 
         if path is not None:
             img.save(path)
@@ -147,6 +150,7 @@ def generate_image(image: Tensor, path: Union[Path, None]) -> Image:
         images = list(image)
         images = [torchvision.transforms.ToPILImage()(img) for img in images]
         images = [__crop_whitespaces(img) for img in images]
+        images = [__change_image_colors(img, color=color) for img in images]
 
         # TODO: Try to improve the combining of images so that the words are at a similar height
         #       (for example, the word "quick" is higher than the end of the word "the")
@@ -185,14 +189,13 @@ def combine_images_with_space(
         raise ValueError("Input image list is empty")
 
     total_width, total_height = images[0].size
-    bg_color = images[0].getextrema()[1]
 
     for image in images[1:]:
         w, h = image.size
         total_width += w + spacing
         total_height = max(total_height, h)
 
-    combined_image = ImageMethod.new("L", (total_width, total_height), bg_color)
+    combined_image = ImageMethod.new("RGB", (total_width, total_height), "white")
 
     x_offset = 0
     for img in images:
@@ -200,3 +203,22 @@ def combine_images_with_space(
         x_offset += img.width + spacing
 
     return combined_image
+
+
+def __change_image_colors(image: Image, *, color: str) -> Image:
+    rgb_image = image.convert("RGB")
+    datas = rgb_image.getdata()
+    new_image_data = []
+    desired_color = ImageColor.getrgb(color)
+
+    for item in datas:
+        if item[0] in list(range(200, 256)):
+            new_image_data.append((255, 255, 255))
+        elif item[0] in list(range(151)) and color != "black":
+            new_image_data.append(desired_color)
+        else:
+            new_image_data.append(item)
+
+    rgb_image.putdata(new_image_data)
+
+    return rgb_image

@@ -373,6 +373,7 @@ class DiffusionWrapper(pl.LightningModule):
         sequence: str,
         vocab: str,
         *,
+        color: str,
         save_path: Union[str, None],
         style_path: Path = None,
     ) -> plt.Figure:
@@ -384,6 +385,8 @@ class DiffusionWrapper(pl.LightningModule):
         sequence : str
             _description_
         vocab : str
+            _description_
+        color : str
             _description_
         save_path : str
             _description_
@@ -450,5 +453,5 @@ class DiffusionWrapper(pl.LightningModule):
         strokes = torch.cat([strokes, pen_lifts], dim=-1)
 
         return utils.generate_stroke_image(
-            strokes.detach().cpu().numpy(), scale=1.0, save_path=save_path
+            strokes.detach().cpu().numpy(), scale=1.0, save_path=save_path, color=color
         )

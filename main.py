@@ -302,9 +302,12 @@ def generate_handwriting() -> None:
             vocab=config.vocab,
             writer_id=args.writer,
             save_path=save_path,
+            color="black",
         )
     else:
-        model.generate(args.text, save_path=save_path, vocab=config.vocab)
+        model.generate(
+            args.text, save_path=save_path, vocab=config.vocab, color="black"
+        )
 
 
 if __name__ == "__main__":

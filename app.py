@@ -60,6 +60,7 @@ def handwriting_generation(
             vocab=config.vocab,
             writer_id=selected_style,
             save_path=save_path,
+            color=color,
         )
     # TODO: RNN Model
     elif selected_model == "RNN":
@@ -71,6 +72,7 @@ def handwriting_generation(
         save_path=save_path,
         vocab=config.vocab,
         style_path=style_path,
+        color=color,
     )
 
     return ImageModule.frombytes(

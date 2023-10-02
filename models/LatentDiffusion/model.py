@@ -332,6 +332,7 @@ class LatentDiffusionModel(pl.LightningModule):
         vocab: str,
         writer_id: Union[int, Tuple[int, int]],
         *,
+        color: str,
         save_path: Union[Path, None],
         interpolation: bool = False,
         mix_rate: float = None,
@@ -346,6 +347,8 @@ class LatentDiffusionModel(pl.LightningModule):
         vocab : str
             _description_
         writer_id : Union[int, Tuple[int, int]]
+            _description_
+        color : str,
             _description_
         save_path : Path
             _description_
@@ -401,4 +404,4 @@ class LatentDiffusionModel(pl.LightningModule):
 
         image = torch.clamp((image / 2 + 0.5), min=0, max=1).cpu()
 
-        return utils.generate_image(image, save_path)
+        return utils.generate_image(image, save_path, color=color)

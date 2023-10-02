@@ -151,6 +151,7 @@ def diffusion_step(
 def generate_stroke_image(
     strokes: np.ndarray,
     *,
+    color: str,
     save_path: Union[str, None],
     scale: float = 1.0,
 ) -> plt.Figure:
@@ -160,6 +161,8 @@ def generate_stroke_image(
     Parameters
     ----------
     strokes : np.ndarray
+        _description_
+    color : str
         _description_
     save_path : str
         _description_
@@ -184,7 +187,7 @@ def generate_stroke_image(
             plt.plot(
                 positions[0][prev_index : index + 1],
                 positions[1][prev_index : index + 1],
-                color="black",
+                color=color,
             )
             prev_index = index + 1
 
