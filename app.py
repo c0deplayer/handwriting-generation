@@ -82,14 +82,14 @@ def dynamic_style_ids_update(selected_model: str) -> gr.Number:
     if selected_model == "Diffusion":
         return gr.Number(
             value=1,
-            label=f"Style ID (the value must be in range ({style_range[0]}, {style_range[1]}))",
+            label=f"Style ID (values: ({style_range[0]}, {style_range[1]}))",
             visible=True,
         )
 
     elif selected_model == "LatentDiffusion":
         return gr.Number(
             value=1,
-            label="Style ID (the value must be in range (1, 340))",
+            label="Style ID (values: (1, 340))",
             visible=True,
         )
     else:
@@ -115,7 +115,7 @@ if __name__ == "__main__":
 
                     style = gr.Number(
                         value=1,
-                        label="Style ID (the value must be in range (1, 340))",
+                        label="Style ID (values: (1, 340))",
                     )
 
                     model_type.change(
