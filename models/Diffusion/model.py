@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from einops import rearrange, reduce
+from einops import rearrange
 from matplotlib import pyplot as plt
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 from rich.progress import track
@@ -360,17 +360,13 @@ class DiffusionWrapper(pl.LightningModule):
 
         torch.clamp_(pen_lifts, min=1e-7, max=1 - 1e-7)
         pen_lifts_pred = rearrange(pen_lifts_pred, "b h 1 -> b h")
-        strokes_loss = torch.mean(torch.sum((strokes - strokes_pred) ** 2, dim=-1))
+        strokes_loss = F.mse_loss(strokes_pred, strokes, reduction="mean")
         pen_lifts_loss = torch.mean(
-            reduce(
-                F.binary_cross_entropy(pen_lifts_pred, pen_lifts, reduction="none"),
-                "b v -> b",
-                "mean",
-            )
+            F.binary_cross_entropy(pen_lifts_pred, pen_lifts, reduction="mean")
             * torch.squeeze(alphas, dim=-1)
         )
 
-        return strokes_loss + pen_lifts_loss
+        return strokes_loss + pen_lifts_loss, strokes_loss, pen_lifts_loss
 
     def generate(
         self,
