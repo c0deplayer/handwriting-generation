@@ -6,6 +6,7 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 import lightning.pytorch as pl
+import neptune
 import torch
 import yaml
 from lightning.pytorch.callbacks import (
@@ -13,6 +14,7 @@ from lightning.pytorch.callbacks import (
     RichProgressBar,
     ModelCheckpoint,
 )
+from lightning.pytorch.loggers.neptune import NeptuneLogger
 
 from configs.config import ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion
 from data import utils
@@ -61,6 +63,12 @@ def cli_main():
         "-r",
         "--remote",
         help="Flag for training on remote server",
+        action="store_true",
+    )
+    parser.add_argument(
+        "-n",
+        "--neptune",
+        help="Flag for using NeptuneLogger",
         action="store_true",
     )
     parser.add_argument(
@@ -152,25 +160,25 @@ def prepare_data():
 def train_model():
     global dataset
     # * ModelCheckpoint to save 9 (most of the time) latest models from epochs *
-    kwargs_trainer = dict(
+    trainer_params = dict(
         accelerator=config.device,
         default_root_dir=config.checkpoint_path,
         max_epochs=config.max_epochs,
         callbacks=[
-            RichModelSummary(max_depth=3),
+            RichModelSummary(max_depth=5),
             RichProgressBar(refresh_rate=1, leave=True),
             # EarlyStopping(monitor="val_loss", patience=25),
             ModelCheckpoint(
                 dirpath=config.checkpoint_path,
-                monitor="loss",
-                filename="{epoch}-{loss:.2f}-{val_loss:.2f}",
-                save_top_k=9,
+                monitor="train/loss",
+                filename="{epoch}-{train/loss:.2f}-{val/loss:.2f}",
+                save_top_k=8,
             ),
         ],
     )
 
     if args.config == "Diffusion":
-        kwargs_model = dict(
+        model_params = dict(
             diffusion_params=dict(
                 num_layers=config.num_layers,
                 c1=config.channels,
@@ -182,7 +190,7 @@ def train_model():
             use_ema=config.use_ema,
         )
 
-        kwargs_trainer.update(
+        trainer_params.update(
             {
                 "gradient_clip_val": config.clip_grad,
                 "gradient_clip_algorithm": config.clip_algorithm,
@@ -190,18 +198,18 @@ def train_model():
         )
 
     elif args.config == "RNN":
-        kwargs_model = dict(
+        model_params = dict(
             input_size=config.input_size,
             hidden_size=config.hidden_size,
             num_window=config.num_window,
             num_mixture=config.num_mixture,
             vocab_size=config.vocab_size,
             bias=config.bias,
-            clip_grads=(config.lstm_clip, config.mdn_clip),
+            clip_grads=(config.gru_clip, config.mdn_clip),
         )
 
     else:
-        kwargs_model = dict(
+        model_params = dict(
             unet_params=dict(
                 in_channels=config.channels,
                 out_channels=config.channels,
@@ -212,7 +220,7 @@ def train_model():
                 channel_multipliers=config.channel_multipliers,
                 heads=config.n_heads,
                 d_cond=config.d_cond,
-                n_style_classes=340,  # TODO: This should not be hardcoded !
+                n_style_classes=330,  # TODO: This should not be hardcoded !
                 dropout=config.drop_rate,
                 max_seq_len=config.max_text_len + 2,
             ),
@@ -225,15 +233,52 @@ def train_model():
 
     # * Only for university servers that have two GPUs *
     if config.device == "cuda" and args.remote:
-        kwargs_trainer["devices"] = [1]
+        trainer_params["devices"] = [0]
 
-    model = MODELS[args.config](**kwargs_model)
+    model = MODELS[args.config](**model_params)
     dataset = DATASETS[args.config]
     data_module = DataModule(config=config, dataset=dataset)
 
-    trainer = pl.Trainer(**kwargs_trainer)
+    if args.neptune:
+        source_files = ["main.py"] + [
+            str(path) for path in Path(f"models/{args.config}").glob("*.py")
+        ]
+
+        neptune_logger = NeptuneLogger(
+            project="codeplayer/handwriting-generation",
+            log_model_checkpoints=False,
+            mode="async",
+            capture_stdout=False,
+            source_files=source_files,
+            dependencies="infer",
+        )
+
+        model_version = neptune.init_model_version(
+            model=f"HAN-{MODELS_SN[args.config]}",
+            project="codeplayer/handwriting-generation",
+            mode="async",
+        )
+
+        trainer_params["logger"] = neptune_logger
+
+        neptune_logger.log_hyperparams(model_params)
+        neptune_logger.log_model_summary(model=model, max_depth=-1)
+
+        model_version["run/id"] = neptune_logger.run["sys/id"].fetch()
+        model_version["run/url"] = neptune_logger.run.get_url()
+        model_version["model/parameters"] = model_params
+        model_version["model/config"].upload(
+            f"configs/{args.config}/{args.config_file}"
+        )
+
+    trainer = pl.Trainer(**trainer_params)
     trainer.fit(model=model, datamodule=data_module)
     trainer.save_checkpoint(filepath=f"{config.checkpoint_path}/model.ckpt")
+
+    if args.neptune:
+        # noinspection PyUnboundLocalVariable
+        model_version["model/binary"].upload(f"{config.checkpoint_path}/model.ckpt")
+        model_version.stop()
 
 
 def generate_handwriting() -> None:
@@ -249,10 +294,10 @@ def generate_handwriting() -> None:
             args.text,
             vocab=config.vocab,
             writer_id=args.writer,
-            save_path="handwriting.png",
+            save_path=save_path,
         )
     else:
-        model.generate(args.text, save_path="handwriting.png", vocab=config.vocab)
+        model.generate(args.text, save_path=save_path, vocab=config.vocab)
 
 
 if __name__ == "__main__":

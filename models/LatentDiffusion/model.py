@@ -292,7 +292,12 @@ class LatentDiffusionModel(pl.LightningModule):
         noise_pred, noise = self(batch)
 
         loss = F.mse_loss(noise_pred, noise, reduction="mean")
-        self.log("loss", loss, on_step=True, on_epoch=True, prog_bar=True)
+        mae_loss = F.l1_loss(noise_pred, noise, reduction="mean")
+
+        self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log(
+            "train/mae_loss", mae_loss, on_step=False, on_epoch=True, prog_bar=False
+        )
 
         return loss
 
@@ -302,8 +307,16 @@ class LatentDiffusionModel(pl.LightningModule):
         with torch.no_grad():
             noise_pred, noise = self(batch)
 
-        loss = F.mse_loss(noise_pred, noise, reduction="mean")
-        self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+            loss = F.mse_loss(noise_pred, noise, reduction="mean")
+
+            self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+            self.log(
+                "val/mae_loss",
+                F.l1_loss(noise_pred, noise, reduction="mean"),
+                on_step=False,
+                on_epoch=True,
+                prog_bar=False,
+            )
 
         return loss
 

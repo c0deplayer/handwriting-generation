@@ -253,9 +253,19 @@ class DiffusionWrapper(pl.LightningModule):
         strokes_pred, pen_lifts_pred, _ = self(model_batch)
 
         loss_batch = (eps, strokes_pred, pen_lifts, pen_lifts_pred, alphas)
-        loss = self.loss(loss_batch)
+        loss, mse_loss, bce_loss = self.loss(loss_batch)
 
-        self.log("loss", loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log(
+            "train/mse_strokes",
+            mse_loss,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=False,
+        )
+        self.log(
+            "train/bce_eos", bce_loss, on_step=False, on_epoch=True, prog_bar=False
+        )
 
         return loss
 
@@ -275,9 +285,38 @@ class DiffusionWrapper(pl.LightningModule):
             strokes_pred, pen_lifts_pred, _ = self(model_batch)
 
             loss_batch = (eps, strokes_pred, pen_lifts, pen_lifts_pred, alphas)
-            loss = self.loss(loss_batch)
+            loss, mse_loss, bce_loss = self.loss(loss_batch)
 
-        self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+            self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+            self.log(
+                "val/mse_strokes",
+                mse_loss,
+                on_step=False,
+                on_epoch=True,
+                prog_bar=False,
+            )
+            self.log(
+                "val/bce_eos", bce_loss, on_step=False, on_epoch=True, prog_bar=False
+            )
+
+            self.log(
+                "val/mae_strokes",
+                F.l1_loss(strokes_pred, strokes, reduction="mean"),
+                on_step=False,
+                on_epoch=True,
+                prog_bar=True,
+            )
+            self.log(
+                "val/mae_eos",
+                F.l1_loss(
+                    rearrange(pen_lifts_pred, "b h 1 -> b h"),
+                    pen_lifts,
+                    reduction="mean",
+                ),
+                on_step=False,
+                on_epoch=True,
+                prog_bar=True,
+            )
 
         return loss
 
@@ -302,7 +341,7 @@ class DiffusionWrapper(pl.LightningModule):
         }
 
     @staticmethod
-    def loss(loss_batch: Tuple[Tensor, ...]) -> Tensor:
+    def loss(loss_batch: Tuple[Tensor, ...]) -> Tuple[Tensor, Tensor, Tensor]:
         """
         _summary_
 
