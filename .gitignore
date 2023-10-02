@@ -174,5 +174,8 @@ model_checkpoints/
 # Private files/backups (Python)
 __*.py
 
-# _
+# Pre-processed saved datasets
 data/h5_dataset/
+
+# Images of generated handwriting
+images/
