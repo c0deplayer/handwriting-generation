@@ -1,3 +1,4 @@
+import os
 import warnings
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -419,3 +420,14 @@ def save_dataset_to_h5(
                 image_data = np.array(data_dict["image"])
                 group.create_dataset("image", data=image_data)
                 group.create_dataset("style", data=data_dict["style"].numpy())
+
+
+def uniquify(path: Union[Path, str]) -> str:
+    filename, extension = os.path.splitext(path)
+    counter = 1
+
+    while os.path.exists(path):
+        path = f"{filename}({str(counter)}){extension}"
+        counter += 1
+
+    return path

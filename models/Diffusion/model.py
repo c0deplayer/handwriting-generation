@@ -373,9 +373,9 @@ class DiffusionWrapper(pl.LightningModule):
         sequence: str,
         vocab: str,
         *,
-        save_path: str,
+        save_path: Union[str, None],
         style_path: Path = None,
-    ) -> None:
+    ) -> plt.Figure:
         """
         _summary_
 
@@ -418,7 +418,7 @@ class DiffusionWrapper(pl.LightningModule):
         style_vector = rearrange(style_vector, "h w -> 1 h w")
 
         _, sequence = get_encoded_text_with_one_hot_encoding(
-            sequence, tokenizer=Tokenizer(vocab), max_len=0
+            sequence, tokenizer=Tokenizer(vocab), max_len=60
         )
 
         sequence = rearrange(torch.tensor(sequence, device=self.device), "v -> 1 v")
@@ -449,6 +449,6 @@ class DiffusionWrapper(pl.LightningModule):
 
         strokes = torch.cat([strokes, pen_lifts], dim=-1)
 
-        utils.generate_stroke_image(
+        return utils.generate_stroke_image(
             strokes.detach().cpu().numpy(), scale=1.0, save_path=save_path
         )

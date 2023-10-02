@@ -1,10 +1,14 @@
 import math
+import os
+from typing import Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from einops import rearrange, repeat
 from torch import Tensor, nn as nn
+
+from data.utils import uniquify
 
 
 def reshape_up(x: Tensor, *, factor: int = 2) -> Tensor:
@@ -147,7 +151,7 @@ def diffusion_step(
 def generate_stroke_image(
     strokes: np.ndarray,
     *,
-    save_path: str = None,
+    save_path: Union[str, None],
     scale: float = 1.0,
 ) -> plt.Figure:
     """
@@ -157,8 +161,8 @@ def generate_stroke_image(
     ----------
     strokes : np.ndarray
         _description_
-    save_path : str, optional
-        _description_, by default None
+    save_path : str
+        _description_
     scale : float, optional
         _description_, by default 1.0
 
@@ -186,7 +190,12 @@ def generate_stroke_image(
 
     plt.axis("off")
     if save_path is not None:
+        if os.path.isfile(save_path):
+            save_path = uniquify(save_path)
+
         plt.savefig(save_path, bbox_inches="tight")
+    else:
+        generated_image.canvas.draw_idle()
 
     plt.close()
     return generated_image

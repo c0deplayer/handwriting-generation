@@ -29,6 +29,12 @@ MODELS = {
     "LatentDiffusion": LatentDiffusionModel,
 }
 
+MODELS_SN = {
+    "Diffusion": "DM",
+    "RNN": "RNN",
+    "LatentDiffusion": "LDM",
+}
+
 CONFIGS = {
     "Diffusion": ConfigDiffusion,
     "RNN": ConfigRNN,
@@ -288,6 +294,7 @@ def generate_handwriting() -> None:
     )
     model.eval()
 
+    save_path = f"{os.getcwd()}/images/{args.config}/{args.text.replace(' ', '-')}.jpeg"
     if args.config == "LatentDiffusion":
         print(f"Selected writer id: {args.writer}")
         model.generate(

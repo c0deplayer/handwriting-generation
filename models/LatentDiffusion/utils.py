@@ -1,5 +1,6 @@
+import os
 from pathlib import Path
-from typing import Tuple, List
+from typing import Tuple, List, Union
 
 import torch
 import torchvision.transforms
@@ -8,6 +9,7 @@ from PIL.Image import Image
 from einops import rearrange
 from torch import nn, Tensor
 
+from data.utils import uniquify
 from .activation import GeGLU
 
 
@@ -116,7 +118,7 @@ def __crop_whitespaces(image: Image) -> Image:
     return image
 
 
-def save_image(image: Tensor, path: Path) -> None:
+def generate_image(image: Tensor, path: Union[Path, None]) -> Image:
     """
     _summary_
 
@@ -128,13 +130,19 @@ def save_image(image: Tensor, path: Path) -> None:
         _description_
     """
 
+    if os.path.isfile(path):
+        path = uniquify(path)
+
     if image.size(0) == 1:
-        image = image[0]
         image = rearrange(image, "1 h w c -> h w c")
 
         img = torchvision.transforms.ToPILImage()(image)
         img = __crop_whitespaces(img)
-        img.save(path)
+
+        if path is not None:
+            img.save(path)
+
+        return img
     else:
         images = list(image)
         images = [torchvision.transforms.ToPILImage()(img) for img in images]
@@ -142,8 +150,12 @@ def save_image(image: Tensor, path: Path) -> None:
 
         # TODO: Try to improve the combining of images so that the words are at a similar height
         #       (for example, the word "quick" is higher than the end of the word "the")
-        combined_image = combine_images_with_space(images)
-        combined_image.save(path)
+        combined_images = combine_images_with_space(images)
+
+        if path is not None:
+            combined_images.save(path)
+
+        return combined_images
 
 
 def combine_images_with_space(

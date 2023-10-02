@@ -4,6 +4,7 @@ from typing import Any, Dict, Tuple, Union
 import lightning.pytorch as pl
 import torch
 import torch.nn.functional as F
+from PIL.Image import Image
 from diffusers import AutoencoderKL
 from einops import rearrange
 from pytorch_lightning.utilities.types import STEP_OUTPUT
@@ -331,10 +332,10 @@ class LatentDiffusionModel(pl.LightningModule):
         vocab: str,
         writer_id: Union[int, Tuple[int, int]],
         *,
-        save_path: Path,
+        save_path: Union[Path, None],
         interpolation: bool = False,
         mix_rate: float = None,
-    ) -> None:
+    ) -> Image:
         """
         _summary_
 
@@ -367,7 +368,9 @@ class LatentDiffusionModel(pl.LightningModule):
 
         if isinstance(writer_id, int):
             writer_id = torch.as_tensor([writer_id] * len(words), device=self.device)
-        elif not isinstance(writer_id, tuple):
+        elif isinstance(writer_id, tuple):
+            writer_id = torch.as_tensor(writer_id * len(words), device=self.device)
+        else:
             raise TypeError(
                 f"Expected writer_id to be int or tuple, got {type(writer_id)}"
             )
@@ -398,4 +401,4 @@ class LatentDiffusionModel(pl.LightningModule):
 
         image = torch.clamp((image / 2 + 0.5), min=0, max=1).cpu()
 
-        utils.save_image(image, save_path)
+        return utils.generate_image(image, save_path)
