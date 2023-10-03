@@ -4,7 +4,7 @@ from typing import Tuple, List, Union
 
 import torch
 import torchvision.transforms
-from PIL import Image as ImageMethod, ImageColor
+from PIL import Image as ImageModule, ImageColor
 from PIL.Image import Image
 from einops import rearrange
 from torch import nn, Tensor
@@ -132,7 +132,7 @@ def generate_image(image: Tensor, path: Union[Path, None], *, color: str) -> Ima
         _description_
     """
 
-    if os.path.isfile(path):
+    if path is not None and os.path.isfile(path):
         path = uniquify(path)
 
     if image.size(0) == 1:
@@ -195,7 +195,7 @@ def combine_images_with_space(
         total_width += w + spacing
         total_height = max(total_height, h)
 
-    combined_image = ImageMethod.new("RGB", (total_width, total_height), "white")
+    combined_image = ImageModule.new("RGB", (total_width, total_height), "white")
 
     x_offset = 0
     for img in images:
