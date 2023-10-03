@@ -183,7 +183,7 @@ class IAMonDataset(Dataset):
         h5_file_path = Path("data/h5_dataset/train_val_iamondb.h5")
 
         if h5_file_path.is_file():
-            self.__dataset, _ = utils.load_dataset_from_h5(h5_file_path, self.max_files)
+            self.__dataset, _ = utils.load_dataset((h5_file_path, None), self.max_files)
         else:
             self.__dataset = self.preprocess_data()
 
@@ -325,10 +325,13 @@ class IAMDataset(Dataset):
 
     def __load_data__(self) -> None:
         h5_file_path = Path(f"data/h5_dataset/{self.dataset_type}_iamdb.h5")
+        json_file_path = Path(
+            f"data/json_writer_ids/{self.dataset_type}_writer_ids.json"
+        )
 
-        if h5_file_path.is_file():
-            self.__dataset, self.__map_writer_id = utils.load_dataset_from_h5(
-                h5_file_path, self.max_files, latent=True
+        if h5_file_path.is_file() and json_file_path.is_file():
+            self.__dataset, self.__map_writer_id = utils.load_dataset(
+                (h5_file_path, json_file_path), self.max_files, latent=True
             )
         else:
             self.__dataset, self.__map_writer_id = self.preprocess_data()
@@ -366,7 +369,11 @@ class IAMDataset(Dataset):
             img_path = raw_data_path / f"words/{f_folder}/{s_folder}/{image_id}.png"
 
             image = utils.get_image(
-                img_path, self.img_width, self.img_height, latent=True
+                img_path,
+                self.img_width,
+                self.img_height,
+                latent=True,
+                centering=(0.5, 0.5),
             )
 
             if image is None:

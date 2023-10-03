@@ -1,3 +1,4 @@
+import json
 import os
 import warnings
 import xml.etree.ElementTree as ET
@@ -313,15 +314,15 @@ def get_max_seq_len(strokes_path: Path) -> int:
     return max_length
 
 
-def load_dataset_from_h5(
-    path: Path, max_files: int, *, latent: bool = False
+def load_dataset(
+    path: Tuple[Path, Union[Path, None]], max_files: int, *, latent: bool = False
 ) -> Tuple[List[Dict[str, Any]], Union[None, Dict[str, int]]]:
     """
     _summary_
 
     Parameters
     ----------
-    path : Path
+    path : Tuple[Path, Union[Path, None]]
         _description_
     max_files : int
         _description_
@@ -333,10 +334,12 @@ def load_dataset_from_h5(
     Tuple[List[Dict[str, Any]], Union[None, Dict[str, int]]]
         _description_
     """
+    if latent:
+        with open(path[1], mode="r") as fp:
+            map_writer_id = json.load(fp)
 
-    with h5py.File(path, mode="r") as f:
+    with h5py.File(path[0], mode="r") as f:
         dataset = []
-        map_writer_id = {}
 
         for group_name in track(
             f["dataset_group"], description="Loading dataset from H5 file..."
@@ -350,8 +353,6 @@ def load_dataset_from_h5(
                     "image": torch.tensor(np.array(group["image"])),
                     "label": np.array(group["label"]),
                 }
-                if writer_id not in map_writer_id.keys():
-                    map_writer_id[writer_id] = group.attrs["writer_map"]
 
             else:
                 data_dict = {
@@ -373,9 +374,9 @@ def load_dataset_from_h5(
         return dataset, map_writer_id
 
 
-def save_dataset_to_h5(
+def save_dataset(
     dataset: List[Dict[str, Any]],
-    path: Path,
+    path: Tuple[Path, Union[Path, None]],
     *,
     latent: bool = False,
     map_writer_ids: Dict[str, int] = None,
@@ -387,15 +388,18 @@ def save_dataset_to_h5(
     ----------
     dataset : List[Dict[str, Any]]
         _description_
-    path : Path
+    path : Tuple[Path, Union[Path, None]]
         _description_
     latent : bool, optional
         _description_, by default False
     map_writer_ids : Dict[str, int], optional
         _description_, by default None
     """
+    if map_writer_ids is not None:
+        with open(path[1], mode="w") as fp:
+            json.dump(map_writer_ids, fp, indent=4)
 
-    with h5py.File(path, mode="w") as f:
+    with h5py.File(path[0], mode="w") as f:
         dataset_h5 = f.create_group("dataset_group")
 
         for i, data_dict in track(enumerate(dataset), description="Saving dataset..."):
@@ -404,7 +408,6 @@ def save_dataset_to_h5(
             group.attrs["writer"] = writer_id
 
             if latent:
-                group.attrs["writer_map"] = map_writer_ids[writer_id]
                 image_data = data_dict["image"].numpy()
                 group.create_dataset("image", data=image_data)
                 group.create_dataset("label", data=data_dict["label"])

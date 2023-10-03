@@ -1,4 +1,5 @@
 import contextlib
+import json
 import os
 import random
 import sys
@@ -120,15 +121,17 @@ def prepare_data():
             max_files=config.max_files,
         )
         dataset = DATASETS[args.config](**kwargs_dataset)
-        utils.save_dataset_to_h5(dataset.dataset, h5_file_path)
+        utils.save_dataset(dataset.dataset, (h5_file_path, None))
 
     else:
         train_size = config.get("train_size", 0.85)
         val_size = 1.0 - train_size
         h5_file_path = Path("data/h5_dataset/train_iamdb.h5")
+        json_file_path = Path("data/json_writer_ids/train_writer_ids.json")
 
         with contextlib.suppress(FileNotFoundError):
             os.remove(h5_file_path)
+            os.remove(json_file_path)
 
         kwargs_dataset = dict(
             config=config,
@@ -140,24 +143,26 @@ def prepare_data():
         )
 
         dataset = DATASETS[args.config](**kwargs_dataset)
-        utils.save_dataset_to_h5(
+        utils.save_dataset(
             dataset.dataset,
-            h5_file_path,
+            (h5_file_path, json_file_path),
             latent=True,
             map_writer_ids=dataset.map_writer_id,
         )
 
         h5_file_path = Path("data/h5_dataset/val_iamdb.h5")
+        json_file_path = Path("data/json_writer_ids/val_writer_ids.json")
         with contextlib.suppress(FileNotFoundError):
             os.remove(h5_file_path)
+            os.remove(json_file_path)
 
         kwargs_dataset["max_files"] = val_size * config.max_files
         kwargs_dataset["dataset_type"] = "val"
 
         dataset = DATASETS[args.config](**kwargs_dataset)
-        utils.save_dataset_to_h5(
+        utils.save_dataset(
             dataset.dataset,
-            h5_file_path,
+            (h5_file_path, json_file_path),
             latent=True,
             map_writer_ids=dataset.map_writer_id,
         )
@@ -215,6 +220,11 @@ def train_model():
         )
 
     else:
+        with open("data/json_writer_ids/train_writer_ids.json", mode="r") as fp:
+            map_writer_id = json.load(fp)
+            n_style_classes = len(map_writer_id)
+            del map_writer_id
+
         model_params = dict(
             unet_params=dict(
                 in_channels=config.channels,
@@ -226,7 +236,7 @@ def train_model():
                 channel_multipliers=config.channel_multipliers,
                 heads=config.n_heads,
                 d_cond=config.d_cond,
-                n_style_classes=330,  # TODO: This should not be hardcoded !
+                n_style_classes=n_style_classes,
                 dropout=config.drop_rate,
                 max_seq_len=config.max_text_len + 2,
             ),
