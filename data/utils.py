@@ -2,6 +2,7 @@ import json
 import os
 import warnings
 import xml.etree.ElementTree as ET
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Union, Dict, List, Tuple, Any
 
@@ -14,6 +15,8 @@ from PIL import Image as ImageModule, ImageOps
 from PIL.Image import Image
 from numpy.linalg import norm
 from rich.progress import track
+from torch import Tensor
+from torchvision.transforms import Normalize
 
 from .tokenizer import Tokenizer
 
@@ -441,3 +444,21 @@ def uniquify(path: Union[Path, str]) -> str:
         counter += 1
 
     return path
+
+
+class NormalizeInverse(Normalize):
+    """
+    Undoes the normalization and returns the reconstructed images in the input domain.
+    """
+
+    def __init__(self, mean: Sequence, std: Sequence) -> None:
+        mean = torch.as_tensor(mean)
+        std = torch.as_tensor(std)
+
+        std_inv = 1 / (std + 1e-7)
+        mean_inv = -mean * std_inv
+
+        super().__init__(mean_inv, std_inv, inplace=True)
+
+    def __call__(self, tensor: Tensor) -> Tensor:
+        return super().__call__(tensor.clone())
