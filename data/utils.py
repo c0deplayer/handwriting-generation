@@ -152,7 +152,12 @@ def __combine_strokes(strokes: np.ndarray, n: int) -> np.ndarray:
 
 
 def get_image(
-    path: Path, width: int, height: int, *, latent: bool = False
+    path: Path,
+    width: int,
+    height: int,
+    *,
+    latent: bool = False,
+    centering: Tuple[float, float] = (0.0, 0.0),
 ) -> Union[Image, None]:
     """
     _summary_
@@ -167,6 +172,8 @@ def get_image(
         _description_
     latent : bool, optional
         _description_, by default False
+    centering : Tuple[float, float], optional
+        _description_, by default (0.0, 0.0)
 
     Returns
     -------
@@ -207,7 +214,7 @@ def get_image(
         method=ImageModule.LANCZOS,
         size=(width, height),
         color="white",
-        centering=(0, 0),
+        centering=centering,
     )
 
 
