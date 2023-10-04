@@ -344,6 +344,7 @@ def load_dataset(
     Tuple[List[Dict[str, Any]], Union[None, Dict[str, int]]]
         _description_
     """
+    map_writer_id = None
     if latent:
         with open(path[1], mode="r") as fp:
             map_writer_id = json.load(fp)
