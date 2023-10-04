@@ -118,7 +118,9 @@ def __crop_whitespaces(image: Image) -> Image:
     return image
 
 
-def generate_image(image: Tensor, path: Union[Path, None], *, color: str) -> Image:
+def generate_image(
+    image: Tensor, path: Union[Path, None], *, color: str, is_fid: bool = False
+) -> Union[Image, List[Image]]:
     """
     _summary_
 
@@ -130,27 +132,34 @@ def generate_image(image: Tensor, path: Union[Path, None], *, color: str) -> Ima
         _description_
     color : str
         _description_
+    is_fid : bool
+        _description_, by default False
     """
 
     if path is not None and os.path.isfile(path):
         path = uniquify(path)
 
     if image.size(0) == 1:
-        image = rearrange(image, "1 h w c -> h w c")
+        image = rearrange(image, "1 c h w -> c h w")
 
-        img = torchvision.transforms.ToPILImage()(image)
-        img = __crop_whitespaces(img)
-        img = __change_image_colors(img, color=color)
+        image = torchvision.transforms.ToPILImage()(image)
+        image = __change_image_colors(image, color=color)
 
         if path is not None:
-            img.save(path)
+            image.save(path)
 
-        return img
+        return image
+    elif is_fid:
+        images = list(image)
+        images = [torchvision.transforms.ToPILImage()(image) for image in images]
+        images = [__change_image_colors(image, color=color) for image in images]
+
+        return images
     else:
         images = list(image)
-        images = [torchvision.transforms.ToPILImage()(img) for img in images]
-        images = [__crop_whitespaces(img) for img in images]
-        images = [__change_image_colors(img, color=color) for img in images]
+        images = [torchvision.transforms.ToPILImage()(image) for image in images]
+        images = [__crop_whitespaces(image) for image in images]
+        images = [__change_image_colors(image, color=color) for image in images]
 
         # TODO: Try to improve the combining of images so that the words are at a similar height
         #       (for example, the word "quick" is higher than the end of the word "the")

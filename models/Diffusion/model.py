@@ -1,9 +1,7 @@
-import os
 from pathlib import Path
 from typing import Tuple, Dict, Union, Any
 
 import lightning.pytorch as pl
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -238,10 +236,8 @@ class DiffusionWrapper(pl.LightningModule):
     def forward(self, batch: Tuple[Tensor, ...]) -> Tuple[Tensor, Tensor, Tensor]:
         return self.diffusion_model(batch)
 
-    def training_step(
-        self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int
-    ) -> Tensor:
-        strokes, text, style = batch
+    def training_step(self, batch: Tuple[Tensor, ...], batch_idx: int) -> Tensor:
+        strokes, text, style, _ = batch
         strokes, pen_lifts = strokes[:, :, :2], strokes[:, :, 2]
 
         alphas = utils.get_alphas(strokes.size(0), self.alpha, device=strokes.device)
@@ -269,10 +265,8 @@ class DiffusionWrapper(pl.LightningModule):
 
         return loss
 
-    def validation_step(
-        self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int
-    ) -> Tensor:
-        strokes, text, style = batch
+    def validation_step(self, batch: Tuple[Tensor, ...], batch_idx: int) -> Tensor:
+        strokes, text, style, _ = batch
         strokes, pen_lifts = strokes[:, :, :2], strokes[:, :, 2]
 
         alphas = utils.get_alphas(strokes.size(0), self.alpha, device=strokes.device)
@@ -370,12 +364,13 @@ class DiffusionWrapper(pl.LightningModule):
 
     def generate(
         self,
-        sequence: str,
+        sequence: Union[str, Tensor],
         vocab: str,
         *,
         color: str,
         save_path: Union[str, None],
-        style_path: Path = None,
+        style_path: Union[str, Tensor],
+        is_fid: bool = False,
     ) -> plt.Figure:
         """
         _summary_
@@ -388,6 +383,8 @@ class DiffusionWrapper(pl.LightningModule):
             _description_
         color : str
             _description_
+        is_fid : bool, optional
+            _description_, by default False
         save_path : str
             _description_
         style_path : Path | None, optional
@@ -401,34 +398,33 @@ class DiffusionWrapper(pl.LightningModule):
 
         pl.seed_everything(seed=42)
 
-        if style_path is None:
-            asset_dir = os.listdir("assets")
-            style_path = Path(
-                f"assets/{asset_dir[np.random.randint(0, len(asset_dir))]}"
+        if not is_fid:
+            style_path = Path(f"assets/{style_path}")
+            style_extractor = StyleExtractor(device=self.device)
+
+            writer_style = get_image(style_path, 1400, 96)
+            writer_style = rearrange(
+                transforms.PILToTensor()(writer_style).to(torch.float32),
+                "1 h w -> 1 1 h w",
             )
 
-        style_extractor = StyleExtractor(device=self.device)
+            style_vector = style_extractor(writer_style)
+            style_vector = rearrange(style_vector, "h w -> 1 h w")
+            style_vector = style_vector.to(device=self.device)
 
-        time_steps = len(sequence) * 16
+            _, text = get_encoded_text_with_one_hot_encoding(
+                sequence, tokenizer=Tokenizer(vocab), max_len=0
+            )
+            text = rearrange(torch.tensor(text, device=self.device), "v -> 1 v")
+        else:
+            text = sequence.clone()
+            style_vector = style_path
+
+        time_steps = text.size(1) * 16
         time_steps = time_steps - (time_steps % 8) + 8
-
-        writer_style = get_image(style_path, 1400, 96)
-        writer_style = rearrange(
-            transforms.PILToTensor()(writer_style).to(torch.float32), "1 h w -> 1 1 h w"
-        )
-
-        style_vector = style_extractor(writer_style)
-        style_vector = rearrange(style_vector, "h w -> 1 h w")
-
-        _, sequence = get_encoded_text_with_one_hot_encoding(
-            sequence, tokenizer=Tokenizer(vocab), max_len=60
-        )
-
-        sequence = rearrange(torch.tensor(sequence, device=self.device), "v -> 1 v")
-        batch_size = sequence.size(0)
+        batch_size = text.size(0)
         beta_len = len(self.beta)
         strokes = torch.randn((batch_size, time_steps, 2), device=self.device)
-        style_vector = style_vector.to(device=self.device)
 
         with torch.no_grad():
             for i in track(reversed(range(beta_len))):
@@ -441,7 +437,7 @@ class DiffusionWrapper(pl.LightningModule):
                     if i > 0
                     else torch.tensor([1.0], device=self.device)
                 )
-                batch = (strokes, sequence, torch.sqrt(alpha), style_vector)
+                batch = (strokes, text, torch.sqrt(alpha), style_vector)
 
                 model_out, pen_lifts, _ = (
                     self.ema(batch) if self.use_ema else self(batch)

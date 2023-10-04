@@ -262,7 +262,7 @@ class UNetModel(nn.Module):
         time_steps: Tensor,
         *,
         context: Tensor = None,
-        writer_id: Union[Tensor, Tuple[int, int]] = None,
+        writer_id: Union[Tensor, Tuple[int, ...]] = None,
         interpolation: bool = False,
         mix_rate: float = None,
     ) -> Tensor:
@@ -277,7 +277,7 @@ class UNetModel(nn.Module):
 
         if self.n_style_classes is not None and writer_id.size(0) != x.size(0):
             raise RuntimeError(
-                f"Expected size to be {x.size(1)}, got {writer_id.size()}"
+                f"Expected size to be {x.size(0)}, got {writer_id.size(0)}"
             )
 
         if interpolation:

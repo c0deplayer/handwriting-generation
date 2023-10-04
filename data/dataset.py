@@ -1,5 +1,3 @@
-import os
-import random
 from pathlib import Path
 from typing import Any, Literal, Union, Dict, List, Tuple
 
@@ -209,20 +207,14 @@ class IAMonDataset(Dataset):
             writer_id, idx = line.strip().split(",")
             path_txt = ascii_path / f"{idx[:3]}/{idx[:7]}/{idx}.txt"
 
-            path_images = img_path / f"{idx[:3]}/{idx[:7]}"
-            images = os.listdir(path_images)
-            shuffled_images = images.copy()
-            random.shuffle(shuffled_images)
-
             transcription = utils.get_transcription(path_txt)
 
             for file, raw_text in transcription.items():
                 if len(raw_text) > self.max_text_len:
-                    shuffled_images.pop(0)
                     continue
 
                 path_file_xml = strokes_path / f"{idx[:3]}/{idx[:7]}/{file}.xml"
-                path_file_tif = path_images / shuffled_images.pop(0)
+                path_file_tif = img_path / f"{idx[:3]}/{idx[:7]}/{file}.tif"
 
                 strokes = utils.get_line_strokes(path_file_xml, self.max_seq_len)
 
@@ -230,7 +222,9 @@ class IAMonDataset(Dataset):
                     raw_text, self.tokenizer, self.max_text_len
                 )
 
-                image = utils.get_image(path_file_tif, self.img_width, self.img_height)
+                image = utils.get_image(
+                    path_file_tif, self.img_width, self.img_height, centering=(0.5, 0.5)
+                )
 
                 if strokes is None or image is None:
                     continue
@@ -273,9 +267,9 @@ class IAMonDataset(Dataset):
             strokes = torch.tensor(self.dataset[index]["strokes"], dtype=torch.float32)
             text = torch.tensor(self.dataset[index]["text"])
             style = self.dataset[index]["style"]
+            image = torchvision.transforms.ToTensor()(self.dataset[index]["image"])
 
-            return strokes, text, style
-
+            return strokes, text, style, image
         else:
             strokes = torch.tensor(self.dataset[index]["strokes"], dtype=torch.float32)
             text = torch.tensor(self.dataset[index]["one_hot"], dtype=torch.float32)

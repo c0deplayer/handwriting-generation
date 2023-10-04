@@ -1,6 +1,6 @@
 import math
 import os
-from typing import Union
+from typing import Union, List
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -154,7 +154,7 @@ def generate_stroke_image(
     color: str,
     save_path: Union[str, None],
     scale: float = 1.0,
-) -> plt.Figure:
+) -> Union[plt.Figure, List[plt.Figure]]:
     """
     _summary_
 
@@ -175,33 +175,36 @@ def generate_stroke_image(
         _description_
     """
 
-    strokes = strokes.squeeze()
-    positions, pen_lifts = np.cumsum(strokes, axis=0).T[:2], strokes[:, 2].round()
+    fake_samples = []
+    for stroke in strokes:
+        positions, pen_lifts = np.cumsum(stroke, axis=0).T[:2], stroke[:, 2].round()
 
-    prev_index = 0
-    width, height = np.max(positions, axis=-1) - np.min(positions, axis=-1)
-    generated_image = plt.figure(figsize=(scale * width / height, scale))
+        prev_index = 0
+        width, height = np.max(positions, axis=-1) - np.min(positions, axis=-1)
+        generated_image = plt.figure(figsize=(scale * width / height, scale))
 
-    for index, value in enumerate(pen_lifts):
-        if value:
-            plt.plot(
-                positions[0][prev_index : index + 1],
-                positions[1][prev_index : index + 1],
-                color=color,
-            )
-            prev_index = index + 1
+        for index, value in enumerate(pen_lifts):
+            if value:
+                plt.plot(
+                    positions[0][prev_index : index + 1],
+                    positions[1][prev_index : index + 1],
+                    color=color,
+                )
+                prev_index = index + 1
 
-    plt.axis("off")
-    if save_path is not None:
-        if os.path.isfile(save_path):
-            save_path = uniquify(save_path)
+        plt.axis("off")
+        if save_path is not None:
+            if os.path.isfile(save_path):
+                save_path = uniquify(save_path)
 
-        plt.savefig(save_path, bbox_inches="tight")
-    else:
-        generated_image.canvas.draw_idle()
+            plt.savefig(save_path, bbox_inches="tight")
+        else:
+            generated_image.canvas.draw_idle()
 
-    plt.close()
-    return generated_image
+        plt.close()
+        fake_samples.append(generated_image)
+
+    return fake_samples[0] if len(fake_samples) == 1 else fake_samples
 
 
 class FeedForwardNetwork(nn.Module):

@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as F
 from PIL.Image import Image
 from diffusers import AutoencoderKL
-from einops import rearrange
+from einops import rearrange, repeat
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 from rich.progress import track
 from torch import Tensor, nn
@@ -88,7 +88,7 @@ class DiffusionWrapper(nn.Module):
         self,
         beta_alpha: Tuple[Tensor, Tensor, Tensor],
         batch_size: int,
-        writer_id: Union[Tensor, Tuple[int, int]],
+        writer_id: Tensor,
         word: Tensor,
         n_steps: int,
         *,
@@ -328,12 +328,13 @@ class LatentDiffusionModel(pl.LightningModule):
 
     def generate(
         self,
-        text_line: str,
+        text_line: Union[str, Tensor],
         vocab: str,
-        writer_id: Union[int, Tuple[int, int]],
+        writer_id: Union[int, Tuple[int, ...], Tensor],
         *,
         color: str,
         save_path: Union[Path, None],
+        is_fid: bool = False,
         interpolation: bool = False,
         mix_rate: float = None,
     ) -> Image:
@@ -342,7 +343,7 @@ class LatentDiffusionModel(pl.LightningModule):
 
         Parameters
         ----------
-        text_line : str
+        text_line : Union[str, Tensor]
             _description_
         vocab : str
             _description_
@@ -352,6 +353,8 @@ class LatentDiffusionModel(pl.LightningModule):
             _description_
         save_path : Path
             _description_
+        is_fid : bool
+            _description_, by default False
         interpolation : bool, optional
             _description_, by default False
         mix_rate : float, optional
@@ -365,29 +368,38 @@ class LatentDiffusionModel(pl.LightningModule):
 
         pl.seed_everything(seed=42)
 
-        words = text_line.split(" ")
-        words_n = []
-        tokenizer = Tokenizer(vocab)
+        if not is_fid:
+            words = text_line.split(" ")
+            words_n = []
+            tokenizer = Tokenizer(vocab)
 
-        if isinstance(writer_id, int):
-            writer_id = torch.as_tensor([writer_id] * len(words), device=self.device)
-        elif isinstance(writer_id, tuple):
-            writer_id = torch.as_tensor(writer_id * len(words), device=self.device)
+            if isinstance(writer_id, int):
+                writer_id = torch.as_tensor(
+                    [writer_id] * len(words), device=self.device
+                )
+            elif isinstance(writer_id, tuple):
+                writer_id = torch.as_tensor(writer_id * len(words), device=self.device)
+            else:
+                raise TypeError(
+                    f"Expected writer_id to be int or tuple, got {type(writer_id)}"
+                )
+
+            for word in words:
+                _, word_enc = get_encoded_text_with_one_hot_encoding(
+                    word, tokenizer=tokenizer, max_len=8
+                )
+                word_tensor = torch.tensor(
+                    word_enc, dtype=torch.long, device=self.device
+                )
+                word_tensor = rearrange(word_tensor, "v -> 1 v")
+
+                words_n.append(word_tensor)
+
+            words_t = torch.cat(words_n, dim=0)
+            # TODO: Test this
+            words_t = repeat(words_t, "b v -> (b repeat) v", repeat=writer_id.size(0))
         else:
-            raise TypeError(
-                f"Expected writer_id to be int or tuple, got {type(writer_id)}"
-            )
-
-        for word in words:
-            _, word_enc = get_encoded_text_with_one_hot_encoding(
-                word, tokenizer=tokenizer, max_len=8
-            )
-            word_tensor = torch.tensor(word_enc, dtype=torch.long, device=self.device)
-            word_tensor = rearrange(word_tensor, "v -> 1 v")
-
-            words_n.append(word_tensor)
-
-        words_t = torch.cat(words_n, dim=0)
+            words_t = text_line.clone()
 
         x = self.ema.model.generate_image_noise(
             beta_alpha=(self.beta, self.alpha, self.alpha_bar),
@@ -404,4 +416,4 @@ class LatentDiffusionModel(pl.LightningModule):
 
         image = torch.clamp((image / 2 + 0.5), min=0, max=1).cpu()
 
-        return utils.generate_image(image, save_path, color=color)
+        return utils.generate_image(image, save_path, color=color, is_fid=is_fid)
