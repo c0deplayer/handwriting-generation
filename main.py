@@ -183,6 +183,8 @@ def train_model():
                 dirpath=config.checkpoint_path,
                 monitor="train/loss",
                 filename="{epoch}-{train/loss:.2f}-{val/loss:.2f}",
+                filename="epoch{epoch:02d}-train_loss{train/loss:.2f}-val_loss{val/loss:.2f}",
+                auto_insert_metric_name=False,
                 save_top_k=8,
             ),
         ],
