@@ -1,6 +1,5 @@
 blacklist: !!python/tuple
   - z00-001
-  - a08-551z
   - z01-000
   - z01-000z
   - z01-010a
