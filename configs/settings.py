@@ -1,3 +1,5 @@
+import matplotlib.colors as plt_colors
+
 from configs.config import ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion
 from data.dataset import IAMonDataset, IAMDataset
 from models.Diffusion.model import DiffusionWrapper
@@ -27,3 +29,6 @@ DATASETS = {
     "RNN": IAMonDataset,
     "LatentDiffusion": IAMDataset,
 }
+
+MODELS_APP = ["RNN", "Diffusion", "LatentDiffusion"]
+COLORS = list(plt_colors.CSS4_COLORS.keys())

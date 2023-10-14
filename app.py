@@ -4,16 +4,12 @@ from typing import Tuple
 import PIL.Image as ImageModule
 import gradio as gr
 import lightning.pytorch as pl
-import matplotlib.colors as plt_colors
 import torch
 from PIL.Image import Image
 from dataclass_wizard import YAMLWizard
 from ruamel import yaml
 
-from main import CONFIGS, MODELS
-
-MODELS_FN = ["RNN", "Diffusion", "LatentDiffusion"]
-COLORS = list(plt_colors.CSS4_COLORS.keys())
+from configs.settings import CONFIGS, MODELS, COLORS, MODELS_APP
 
 
 def load_model_and_config(selected_model: str) -> Tuple[pl.LightningModule, YAMLWizard]:
@@ -110,7 +106,7 @@ if __name__ == "__main__":
                 text = gr.Textbox(value="Handwriting Synthesis in Python", label="Text")
                 with gr.Row():
                     model_type = gr.Dropdown(
-                        choices=MODELS_FN,
+                        choices=MODELS_APP,
                         value="LatentDiffusion",
                         label="Model type",
                     )
