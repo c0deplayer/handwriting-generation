@@ -4,7 +4,7 @@ import warnings
 import xml.etree.ElementTree as ET
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Union, Dict, List, Tuple, Any
+from typing import Union, Dict, List, Tuple, Any, Optional
 
 import PIL
 import h5py
@@ -204,13 +204,7 @@ def get_image(
         bbox = ImageOps.invert(img).getbbox()
         img = img.crop(bbox)
 
-    w, h = img.size
-
-    img = img.resize(size=(w * height // h, height), resample=ImageModule.LANCZOS)
-    w, h = img.size
-
-    if w > width:
-        img = img.resize(size=(width, height), resample=ImageModule.LANCZOS)
+    img = ImageOps.contain(img, size=(width, height), method=ImageModule.LANCZOS)
 
     return ImageOps.pad(
         image=img,
@@ -262,7 +256,7 @@ def get_encoded_text_with_one_hot_encoding(
 
 def __pad_strokes(
     strokes: np.array, max_length: int, *, fill_value: float = 0
-) -> Union[np.array, None]:
+) -> Optional[np.array]:
     """
     _summary_
 
