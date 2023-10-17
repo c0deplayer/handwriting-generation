@@ -33,4 +33,3 @@ class PeriodicCheckpoint(ModelCheckpoint):
             monitor_candidates = self._monitor_candidates(trainer)
             filepath = self.format_checkpoint_name(monitor_candidates)
             trainer.save_checkpoint(filepath)
-            trainer.logger.run["model/checkpoints"].upload(filepath)
