@@ -106,3 +106,5 @@ if __name__ == "__main__":
     config = CONFIGS[args.config].from_yaml_file(
         file=config_file, decoder=yaml.load, Loader=yaml.Loader
     )
+
+    generate_handwriting()
