@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Optional
 
 import torch
 import torchvision.transforms
@@ -119,7 +119,12 @@ def __crop_whitespaces(image: Image) -> Image:
 
 
 def generate_image(
-    image: Tensor, path: Union[Path, None], *, color: str, is_fid: bool = False
+    image: Tensor,
+    path: Union[Path, None],
+    *,
+    color: str,
+    labels: Optional[List[str]] = None,
+    is_fid: bool = False,
 ) -> Union[Image, List[Image]]:
     """
     _summary_
@@ -132,6 +137,8 @@ def generate_image(
         _description_
     color : str
         _description_
+    labels : Optional[List[str]]
+        _description_ by default None
     is_fid : bool
         _description_, by default False
     """
@@ -161,9 +168,7 @@ def generate_image(
         images = [__crop_whitespaces(image) for image in images]
         images = [__change_image_colors(image, color=color) for image in images]
 
-        # TODO: Try to improve the combining of images so that the words are at a similar height
-        #       (for example, the word "quick" is higher than the end of the word "the")
-        combined_images = combine_images_with_space(images)
+        combined_images = combine_images_with_space(images, labels)
 
         if path is not None:
             combined_images.save(path)
@@ -173,6 +178,7 @@ def generate_image(
 
 def combine_images_with_space(
     images: List[Image],
+    labels: List[str],
     *,
     spacing: int = 20,
 ) -> Image:
@@ -191,6 +197,8 @@ def combine_images_with_space(
     Image
         The combined PIL Image.
     """
+    char_attention = ["g", "j", "p", "q", "y"]
+    char_attention_img = []
 
     if not isinstance(images, list):
         raise TypeError(f"Expected images to be a list, got {type(images)}")
@@ -199,16 +207,31 @@ def combine_images_with_space(
 
     total_width, total_height = images[0].size
 
-    for image in images[1:]:
+    if any((c in char_attention) for c in labels[0]):
+        char_attention_img.append(0)
+
+    for i, image in enumerate(images[1:], start=1):
         w, h = image.size
         total_width += w + spacing
         total_height = max(total_height, h)
 
-    combined_image = ImageModule.new("RGB", (total_width, total_height), "white")
+        if any((c in char_attention) for c in labels[i]):
+            char_attention_img.append(i)
+
+    if char_attention_img:
+        combined_image = ImageModule.new(
+            "RGB", (total_width, int(total_height * 1.2)), "white"
+        )
+    else:
+        combined_image = ImageModule.new("RGB", (total_width, total_height), "white")
 
     x_offset = 0
-    for img in images:
-        combined_image.paste(img, (x_offset, 0))
+    for i, img in enumerate(images):
+        if i in char_attention_img:
+            combined_image.paste(img, (x_offset, int(total_height * 0.2)))
+        else:
+            combined_image.paste(img, (x_offset, 0))
+
         x_offset += img.width + spacing
 
     return combined_image

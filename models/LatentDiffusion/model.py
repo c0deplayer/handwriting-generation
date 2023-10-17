@@ -370,6 +370,7 @@ class LatentDiffusionModel(pl.LightningModule):
 
         if not is_fid:
             words = text_line.split(" ")
+            labels = words.copy()
             words_n = []
             tokenizer = Tokenizer(vocab)
 
@@ -399,6 +400,7 @@ class LatentDiffusionModel(pl.LightningModule):
             # TODO: Test this
             words_t = repeat(words_t, "b v -> (b repeat) v", repeat=writer_id.size(0))
         else:
+            labels = None
             words_t = text_line.clone()
 
         x = self.ema.model.generate_image_noise(
@@ -416,4 +418,6 @@ class LatentDiffusionModel(pl.LightningModule):
 
         image = torch.clamp((image / 2 + 0.5), min=0, max=1).cpu()
 
-        return utils.generate_image(image, save_path, color=color, is_fid=is_fid)
+        return utils.generate_image(
+            image, save_path, color=color, labels=labels, is_fid=is_fid
+        )
