@@ -2,9 +2,10 @@ import os
 from pathlib import Path
 from typing import Tuple, List, Union, Optional
 
+import potrace
 import torch
 import torchvision.transforms
-from PIL import Image as ImageModule, ImageColor
+from PIL import Image as ImageModule, ImageColor, ImageOps
 from PIL.Image import Image
 from einops import rearrange
 from torch import nn, Tensor
@@ -153,13 +154,12 @@ def generate_image(
         image = __change_image_colors(image, color=color)
 
         if path is not None:
-            image.save(path)
+            __save_image(image, path)
 
         return image
     elif is_fid:
         images = list(image)
         images = [torchvision.transforms.ToPILImage()(image) for image in images]
-        images = [__change_image_colors(image, color=color) for image in images]
 
         return images
     else:
@@ -171,9 +171,53 @@ def generate_image(
         combined_images = combine_images_with_space(images, labels)
 
         if path is not None:
-            combined_images.save(path)
+            __save_image(combined_images, path)
 
         return combined_images
+
+
+def __save_image(image: Image, path: Path) -> None:
+    if path.suffix == ".svg":
+        bitmap = potrace.Bitmap(image, blacklevel=0.7)
+        path_b = bitmap.trace()
+
+        __backend_svg(image, path, path_b)
+    else:
+        image.save(path)
+
+
+def __backend_svg(image: Image, path: Path, path_bitmap: Path) -> None:
+    with open(path, "w") as fp:
+        fp.write(
+            '<svg version="1.1"'
+            + ' xmlns="http://www.w3.org/2000/svg"'
+            + ' xmlns:xlink="http://www.w3.org/1999/xlink"'
+            + f' width="{image.width}" height="{image.height}"'
+            + f' viewBox="0 0 {image.width} {image.height}">'
+        )
+        parts = []
+        for curve in path_bitmap:
+            fs = curve.start_point
+            parts.append(f"M{fs.x},{fs.y}")
+
+            for segment in curve.segments:
+                if segment.is_corner:
+                    a = segment.c
+                    parts.append(f"L{a.x},{a.y}")
+                    b = segment.end_point
+                    parts.append(f"L{b.x},{b.y}")
+                else:
+                    a = segment.c1
+                    b = segment.c2
+                    c = segment.end_point
+                    parts.append(f"C{a.x},{a.y} {b.x},{b.y} {c.x},{c.y}")
+
+            parts.append("z")
+
+        fp.write(
+            f'<path stroke="none" fill="black" fill-rule="evenodd" d="{"".join(parts)}"/>'
+        )
+        fp.write("</svg>")
 
 
 def combine_images_with_space(
@@ -246,7 +290,7 @@ def __change_image_colors(image: Image, *, color: str) -> Image:
     for item in datas:
         if item[0] in list(range(200, 256)):
             new_image_data.append((255, 255, 255))
-        elif item[0] in list(range(151)) and color != "black":
+        elif item[0] in list(range(176)) and color != "black":
             new_image_data.append(desired_color)
         else:
             new_image_data.append(item)

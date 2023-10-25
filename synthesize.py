@@ -2,6 +2,7 @@ import os
 import random
 import sys
 from argparse import ArgumentParser
+from pathlib import Path
 from typing import Union, List
 
 import numpy as np
@@ -73,7 +74,9 @@ def generate_handwriting() -> Union[Image, plt.Figure, List[Image], List[plt.Fig
     )
     model.eval()
 
-    save_path = f"{os.getcwd()}/images/{args.config}/{args.text.replace(' ', '-')}.jpeg"
+    save_path = Path(
+        f"{os.getcwd()}/images/{args.config}/{args.text.replace(' ', '-')}.jpeg"
+    )
 
     if args.config == "LatentDiffusion":
         print(f"Selected writer id: {args.writer}")

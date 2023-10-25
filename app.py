@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from typing import Tuple
 
 import PIL.Image as ImageModule
@@ -29,10 +30,15 @@ def load_model_and_config(selected_model: str) -> Tuple[pl.LightningModule, YAML
 
 
 def handwriting_generation(
-    prompt: str, selected_style: str, color: str, selected_model: str, save_file: int
+    prompt: str,
+    selected_style: str,
+    color: str,
+    selected_model: str,
+    save_file: int,
+    file_format: str,
 ) -> Image:
-    if selected_model == "LatentDiffusion" and not (1 <= int(selected_style) <= 340):
-        raise gr.Error("Style ID for Latent Diffusion must be between 1 and 340")
+    if selected_model == "LatentDiffusion" and not (1 <= int(selected_style) <= 330):
+        raise gr.Error("Style ID for Latent Diffusion must be between 1 and 330")
     elif selected_model == "Diffusion" and not (
         style_range[0] <= int(selected_style) <= style_range[1]
     ):
@@ -47,7 +53,9 @@ def handwriting_generation(
     save_path = (
         None
         if save_file
-        else f"{os.getcwd()}/images/{selected_model}/{prompt.replace(' ', '-')}.jpeg"
+        else Path(
+            f"{os.getcwd()}/images/{selected_model}/{prompt.replace(' ', '-')}.{file_format.lower()}"
+        )
     )
 
     if selected_model == "LatentDiffusion":
@@ -87,11 +95,15 @@ def dynamic_style_ids_update(selected_model: str) -> gr.Number:
     elif selected_model == "LatentDiffusion":
         return gr.Number(
             value=1,
-            label="Style ID (values: (1, 340))",
+            label="Style ID (values: (1, 330))",
             visible=True,
         )
     else:
         return gr.Number(visible=False)
+
+
+def dynamic_image_save_update(save_image: int) -> gr.Radio:
+    return gr.Radio(visible=False) if save_image else gr.Radio(visible=True)
 
 
 if __name__ == "__main__":
@@ -117,9 +129,7 @@ if __name__ == "__main__":
                     )
 
                     model_type.change(
-                        fn=dynamic_style_ids_update,
-                        inputs=model_type,
-                        outputs=style,
+                        fn=dynamic_style_ids_update, inputs=model_type, outputs=style
                     )
 
                     color = gr.Dropdown(
@@ -136,13 +146,27 @@ if __name__ == "__main__":
                         label="Save handwriting image",
                     )
 
+                with gr.Row():
+                    save_type = gr.Radio(
+                        choices=["PNG", "JPEG", "SVG"],
+                        value="PNG",
+                        type="value",
+                        label="File extension to save the image",
+                    )
+
+                    save_image.change(
+                        fn=dynamic_image_save_update,
+                        inputs=save_image,
+                        outputs=save_type,
+                    )
+
                 submit = gr.Button("Submit")
 
             with gr.Column():
                 output = gr.Image(interactive=False, show_label=False)
                 submit.click(
                     fn=handwriting_generation,
-                    inputs=[text, style, color, model_type, save_image],
+                    inputs=[text, style, color, model_type, save_image, save_type],
                     outputs=output,
                 )
 
