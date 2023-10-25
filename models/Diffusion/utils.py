@@ -197,7 +197,7 @@ def generate_stroke_image(
             if os.path.isfile(save_path):
                 save_path = uniquify(save_path)
 
-            plt.savefig(save_path, bbox_inches="tight")
+            plt.savefig(save_path, bbox_inches="tight", format=save_path.suffix[1:])
         else:
             generated_image.canvas.draw_idle()
 
