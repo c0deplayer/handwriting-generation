@@ -167,6 +167,10 @@ def generate_image(
         images = [torchvision.transforms.ToPILImage()(image) for image in images]
         images = [__crop_whitespaces(image) for image in images]
         images = [__change_image_colors(image, color=color) for image in images]
+        images = [
+            ImageOps.contain(image, size=(256, 64), method=ImageModule.LANCZOS)
+            for image in images
+        ]
 
         combined_images = combine_images_with_space(images, labels)
 
