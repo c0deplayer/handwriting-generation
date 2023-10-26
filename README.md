@@ -1,6 +1,106 @@
-# Handwriting Generation
+# Handwriting Generation [WIP]
 
-**WIP**
+## Requirements
+
+* Python >= 3.8
+* WIP
+
+## Datasets & Pre-processing
+
+Download the IAM Dataset and IAM Online Dataset from https://fki.tic.heia-fr.ch/databases/iam-handwriting-database
+and https://fki.tic.heia-fr.ch/databases/iam-on-line-handwriting-database, respectively.
+Place them in the `raw_data/IAMDB` and `raw_data/IAMonDB` folders, respectively.
+
+Then, to preprocess the dataset and save it to an H5 file, simply run the following command:
+
+```
+python3 prepare_data.py -c {RNN,Diffusion,LatentDiffusion}
+```
+
+## Training from scratch
+
+To train a diffusion model, run the following command:
+
+```
+python3 train.py -c Diffusion
+```
+
+## Generate handwriting
+
+To generate handwriting run the following command:
+
+```
+python3 synthesize.py -c LatentDiffusion -t "the quick brown fox jumps" -w 64
+```
+
+## Full sampling
+
+WIP
+
+## Commands
+
+### prepare_data.py
+
+```
+prepare_data.py [-h] -c {RNN,Diffusion,LatentDiffusion} [-cf CONFIG_FILE]
+
+options:
+  -h, --help            show this help message and exit
+  -c {RNN,Diffusion,LatentDiffusion}, --config {RNN,Diffusion,LatentDiffusion}
+                        Type of model
+  -cf CONFIG_FILE, --config-file CONFIG_FILE
+                        Filename for configs
+
+```
+
+### train.py
+
+```
+train.py [-h] -c {RNN,Diffusion,LatentDiffusion} [-cf CONFIG_FILE] [-r] [-n]
+
+options:
+  -h, --help            show this help message and exit
+  -c {RNN,Diffusion,LatentDiffusion}, --config {RNN,Diffusion,LatentDiffusion}
+                        Type of model
+  -cf CONFIG_FILE, --config-file CONFIG_FILE
+                        Filename for configs
+  -r, --remote          Flag indicating whether the model will be trained on a server with dedicated
+                        GPUs, such as the A100
+  -n, --neptune         Flag for using NeptuneLogger
+```
+
+### synthesize.py
+
+```
+synthesize.py [-h] -c {RNN,Diffusion,LatentDiffusion} [-cf CONFIG_FILE] [-t TEXT] [-w WRITER]
+                     [--color COLOR] [-s STYLE_PATH]
+
+options:
+  -h, --help            show this help message and exit
+  -c {RNN,Diffusion,LatentDiffusion}, --config {RNN,Diffusion,LatentDiffusion}
+                        Type of model
+  -cf CONFIG_FILE, --config-file CONFIG_FILE
+                        Filename for configs
+  -t TEXT, --text TEXT  Text to generate
+  -w WRITER, --writer WRITER
+                        Writer style. If not provided, the default writer is selected randomly
+  --color COLOR         Handwriting color. If not provided, the default color is black
+  -s STYLE_PATH, --style_path STYLE_PATH
+                        Filename for style. If not provided, the default style is selected randomly
+```
+
+### full_sample.py
+
+```
+full_sample.py [-h] -c {RNN,Diffusion,LatentDiffusion} [-cf CONFIG_FILE]
+
+options:
+  -h, --help            show this help message and exit
+  -c {RNN,Diffusion,LatentDiffusion}, --config {RNN,Diffusion,LatentDiffusion}
+                        Type of model
+  -cf CONFIG_FILE, --config-file CONFIG_FILE
+                        Filename for configs
+```
 
 ## References
 
@@ -16,3 +116,11 @@
 8. [GLU Variants Improve Transformer](https://arxiv.org/pdf/2002.05202.pdf)
 9. [IAM Handwriting Database & IAM On-Line Handwriting Database](https://fki.tic.heia-fr.ch/databases)
 10. [U-Net: Convolutional Networks for Biomedical Image Segmentation](https://arxiv.org/pdf/1505.04597v1.pdf)
+11. [Compvis/stable-diffusion · hugging face](https://huggingface.co/CompVis/)
+12. [Semi-Parametric Neural Image Synthesis](https://arxiv.org/pdf/2204.11824.pdf)
+13. [Fundamentals of Recurrent Neural Network (RNN) and Long Short-Term Memory (LSTM) network](https://arxiv.org/pdf/1808.03314.pdf)
+14. [Diffusion Models: A Comprehensive Survey of Methods and Applications](https://arxiv.org/pdf/2209.00796.pdf)
+15. [Denoising Diffusion Probabilistic Models](https://arxiv.org/pdf/2006.11239.pdf)
+16. [Spatial Transformer Networks](https://arxiv.org/pdf/1506.02025.pdf)
+17. [Decoupled Weight Decay Regularization](https://arxiv.org/pdf/1711.05101.pdf)
+18. [MobileNetV2: Inverted Residuals and Linear Bottlenecks](https://arxiv.org/pdf/1801.04381.pdf)

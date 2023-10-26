@@ -171,8 +171,8 @@ raw_data/
 # Training information and model checkpoints
 model_checkpoints/
 
-# Private files/backups (Python)
-__*.py
+# Private backups
+__*
 
 # Pre-processed saved datasets
 data/h5_dataset/
