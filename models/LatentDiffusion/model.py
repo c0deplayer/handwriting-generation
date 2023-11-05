@@ -94,7 +94,7 @@ class DiffusionWrapper(nn.Module):
         *,
         mix_rate: float = None,
         interpolation: bool = False,
-        cfg_scale: int = 3,
+        cfg_scale: int = 0,
     ) -> Tensor:
         """
         _summary_
@@ -116,7 +116,7 @@ class DiffusionWrapper(nn.Module):
         interpolation : bool, optional
             _description_, by default False
         cfg_scale : int, optional
-            _description_, by default 3
+            _description_, by default 0
 
         Returns
         -------
@@ -154,8 +154,6 @@ class DiffusionWrapper(nn.Module):
                         x,
                         time_step,
                         context=word,
-                        writer_id=writer_id,
-                        interpolation=interpolation,
                         mix_rate=mix_rate,
                     )
                     predicted_noise = torch.lerp(
@@ -237,7 +235,8 @@ class LatentDiffusionModel(pl.LightningModule):
         self.save_hyperparameters()
 
     def on_fit_start(self) -> None:
-        pl.seed_everything(seed=42)
+        torch.autograd.profiler.emit_nvtx(False)
+        torch.autograd.profiler.profile(False)
 
     def on_train_batch_end(
         self, outputs: STEP_OUTPUT, batch: Tuple[Tensor, ...], batch_idx: int
@@ -293,11 +292,14 @@ class LatentDiffusionModel(pl.LightningModule):
         noise_pred, noise = self(batch)
 
         loss = F.mse_loss(noise_pred, noise, reduction="mean")
-        mae_loss = F.l1_loss(noise_pred, noise, reduction="mean")
 
-        self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         self.log(
-            "train/mae_loss", mae_loss, on_step=False, on_epoch=True, prog_bar=False
+            "train/mae_loss",
+            F.l1_loss(noise_pred, noise, reduction="mean"),
+            on_step=True,
+            on_epoch=True,
+            prog_bar=False,
         )
 
         return loss
@@ -310,11 +312,11 @@ class LatentDiffusionModel(pl.LightningModule):
 
             loss = F.mse_loss(noise_pred, noise, reduction="mean")
 
-            self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+            self.log("val/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
             self.log(
                 "val/mae_loss",
                 F.l1_loss(noise_pred, noise, reduction="mean"),
-                on_step=False,
+                on_step=True,
                 on_epoch=True,
                 prog_bar=False,
             )
