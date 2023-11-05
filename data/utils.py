@@ -428,7 +428,7 @@ def save_dataset(
                 group.create_dataset("style", data=data_dict["style"].numpy())
 
 
-def uniquify(path: Union[Path, str]) -> str:
+def uniquify(path: Path) -> Path:
     filename, extension = os.path.splitext(path)
     counter = 1
 
@@ -436,7 +436,7 @@ def uniquify(path: Union[Path, str]) -> str:
         path = f"{filename}({str(counter)}){extension}"
         counter += 1
 
-    return path
+    return Path(path)
 
 
 class NormalizeInverse(Normalize):
