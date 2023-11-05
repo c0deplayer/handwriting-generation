@@ -185,47 +185,45 @@ def generate_image(
 
 def __save_image(image: Image, path: Path) -> None:
     if path.suffix == ".svg":
-        bitmap = potrace.Bitmap(image, blacklevel=0.7)
-        path_b = bitmap.trace()
-
-        __backend_svg(image, path, path_b)
+        path_bitmap = potrace.Bitmap(image, blacklevel=0.7).trace()
+        __backend_svg(image, path, path_bitmap)
     else:
         image.save(path)
 
 
 def __backend_svg(image: Image, path: Path, path_bitmap: Path) -> None:
-    with open(path, "w") as fp:
-        fp.write(
-            '<svg version="1.1"'
-            + ' xmlns="http://www.w3.org/2000/svg"'
-            + ' xmlns:xlink="http://www.w3.org/1999/xlink"'
-            + f' width="{image.width}" height="{image.height}"'
-            + f' viewBox="0 0 {image.width} {image.height}">'
-        )
-        parts = []
-        for curve in path_bitmap:
-            fs = curve.start_point
-            parts.append(f"M{fs.x},{fs.y}")
+    path_data = []
+    for curve in path_bitmap:
+        start_point = curve.start_point
+        path_data.append(f"M{start_point.x},{start_point.y}")
 
-            for segment in curve.segments:
-                if segment.is_corner:
-                    a = segment.c
-                    parts.append(f"L{a.x},{a.y}")
-                    b = segment.end_point
-                    parts.append(f"L{b.x},{b.y}")
-                else:
-                    a = segment.c1
-                    b = segment.c2
-                    c = segment.end_point
-                    parts.append(f"C{a.x},{a.y} {b.x},{b.y} {c.x},{c.y}")
+        for segment in curve.segments:
+            if segment.is_corner:
+                a = segment.c
+                path_data.append(f"L{a.x},{a.y}")
+                b = segment.end_point
+                path_data.append(f"L{b.x},{b.y}")
+            else:
+                a = segment.c1
+                b = segment.c2
+                c = segment.end_point
+                path_data.append(f"C{a.x},{a.y} {b.x},{b.y} {c.x},{c.y}")
 
-            parts.append("z")
+        path_data.append("z")
 
-        fp.write(
-            f'<path stroke="none" fill="black" fill-rule="evenodd" d="{"".join(parts)}"/>'
-        )
-        fp.write("</svg>")
+    path_element = f'<path stroke="none" fill="black" fill-rule="evenodd" d="{"".join(path_data)}"/>'
 
+    svg_content = (
+        f'<svg version="1.1" xmlns="http://www.w3.org/2000/svg" '
+        f'xmlns:xlink="http://www.w3.org/1999/xlink" '
+        f'width="{image.width}" height="{image.height}" '
+        f'viewBox="0 0 {image.width} {image.height}">'
+    )
+
+    with open(path, mode="w") as svg:
+        svg.write(svg_content)
+        svg.write(path_element)
+        svg.write("</svg>")
 
 
 def __combine_images_with_space(
