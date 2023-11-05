@@ -308,10 +308,10 @@ class AttentionBlock(nn.Module):
         self.layer_norm = nn.LayerNorm(d_model, eps=1e-6, elementwise_affine=False)
         self.affine_0 = AffineTransformLayer(in_features // 12, d_model)
 
-        self.mha_0 = MultiHeadAttention(d_model, num_heads)
+        self.mha_0 = nn.MultiheadAttention(d_model, num_heads, batch_first=True)
         self.affine_1 = AffineTransformLayer(in_features // 12, d_model)
 
-        self.mha_1 = MultiHeadAttention(d_model, num_heads, return_weights=False)
+        self.mha_1 = nn.MultiheadAttention(d_model, num_heads, batch_first=True)
         self.affine_2 = AffineTransformLayer(in_features // 12, d_model)
 
         self.ff_network = FeedForwardNetwork(d_model, d_model, hidden_size=d_model * 2)
@@ -351,13 +351,14 @@ class AttentionBlock(nn.Module):
         if self.swap_channel_layer:
             x = rearrange(x, "b h w -> b w h")
 
+        mask = rearrange(mask, "b 1 1 h -> b h")
         x_pos = x + self.stroke_pos[:, : x.size(1)]
-        x_2, attention = self.mha_0(x_pos, text_pos, text, mask=mask)
+        x_2, attention = self.mha_0(x_pos, text_pos, text, key_padding_mask=mask)
         x_2 = self.layer_norm(self.dropout(x_2))
         x_2 = self.affine_1(x_2, sigma) + x
 
         x_2_pos = x_2 + self.stroke_pos[:, : x.size(1)]
-        x_3 = self.mha_1(x_2_pos, x_2_pos, x_2)
+        x_3, _ = self.mha_1(x_2_pos, x_2_pos, x_2)
         x_3 = self.layer_norm(x_2 + self.dropout(x_3))
         x_3 = self.affine_2(x_3, sigma)
 
