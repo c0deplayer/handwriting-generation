@@ -175,7 +175,7 @@ def generate_image(
             for image in images
         ]
 
-        combined_images = combine_images_with_space(images, labels)
+        combined_images = __combine_images_with_space(images, labels)
 
         if path is not None:
             __save_image(combined_images, path)
@@ -227,7 +227,8 @@ def __backend_svg(image: Image, path: Path, path_bitmap: Path) -> None:
         fp.write("</svg>")
 
 
-def combine_images_with_space(
+
+def __combine_images_with_space(
     images: List[Image],
     labels: List[str],
     *,
@@ -248,6 +249,7 @@ def combine_images_with_space(
     Image
         The combined PIL Image.
     """
+
     char_attention = ["g", "j", "p", "q", "y"]
     char_attention_img = []
 
