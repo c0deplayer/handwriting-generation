@@ -355,9 +355,12 @@ class DiffusionWrapper(pl.LightningModule):
 
         strokes, strokes_pred, pen_lifts, pen_lifts_pred, alphas = loss_batch
 
-        torch.clamp_(pen_lifts, min=1e-7, max=1 - 1e-7)
         pen_lifts_pred = rearrange(pen_lifts_pred, "b h 1 -> b h")
-        strokes_loss = F.mse_loss(strokes_pred, strokes, reduction="mean")
+
+        strokes_loss = torch.mean(
+            torch.sum(F.mse_loss(strokes_pred, strokes, reduction="none"), dim=-1)
+        )
+
         pen_lifts_loss = torch.mean(
             F.binary_cross_entropy(pen_lifts_pred, pen_lifts, reduction="mean")
             * torch.squeeze(alphas, dim=-1)
