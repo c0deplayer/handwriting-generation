@@ -55,6 +55,7 @@ class DataModule(pl.LightningDataModule):
         self.max_seq_len = config.get("max_seq_len", 0)
         self.train_size = config.get("train_size", 0.85)
         self.val_size = 1.0 - self.train_size
+        self.max_seq_len = self.max_seq_len - (self.max_seq_len % 8) + 8
 
     # noinspection PyCallingNonCallable
     def setup(self, stage: str) -> None:
