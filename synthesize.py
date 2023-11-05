@@ -46,7 +46,7 @@ def cli_main():
         "--writer",
         help="Writer style. If not provided, the default writer is selected randomly",
         type=int,
-        default=random.randint(0, 339),
+        default=random.randint(0, 329),
     )
 
     parser.add_argument(
