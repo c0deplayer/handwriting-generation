@@ -64,7 +64,7 @@ def train_model():
             RichModelSummary(max_depth=5),
             RichProgressBar(refresh_rate=1, leave=True),
             PeriodicCheckpoint(
-                every=1,
+                every_steps=10000,
                 dirpath=config.checkpoint_path,
                 filename="model-epoch{epoch:02d}-train_loss{train/loss:.2f}-val_loss{val/loss:.2f}",
             ),
