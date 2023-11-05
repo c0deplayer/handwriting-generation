@@ -368,8 +368,6 @@ class LatentDiffusionModel(pl.LightningModule):
             _description_
         """
 
-        pl.seed_everything(seed=42)
-
         if not is_fid:
             words = text_line.split(" ")
             labels = words.copy()
@@ -377,10 +375,12 @@ class LatentDiffusionModel(pl.LightningModule):
             tokenizer = Tokenizer(vocab)
 
             if isinstance(writer_id, int):
+                is_multiple_writer_ids = False
                 writer_id = torch.as_tensor(
                     [writer_id] * len(words), device=self.device
                 )
             elif isinstance(writer_id, tuple):
+                is_multiple_writer_ids = True
                 writer_id = torch.as_tensor(writer_id * len(words), device=self.device)
             else:
                 raise TypeError(
@@ -399,8 +399,10 @@ class LatentDiffusionModel(pl.LightningModule):
                 words_n.append(word_tensor)
 
             words_t = torch.cat(words_n, dim=0)
-            # TODO: Test this
-            words_t = repeat(words_t, "b v -> (b repeat) v", repeat=writer_id.size(0))
+            if is_multiple_writer_ids:
+                words_t = repeat(
+                    words_t, "b v -> (b repeat) v", repeat=writer_id.size(0)
+                )
         else:
             labels = None
             words_t = text_line.clone()

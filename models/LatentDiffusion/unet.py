@@ -1,5 +1,5 @@
 import math
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Optional
 
 import torch
 import torch.nn as nn
@@ -262,11 +262,11 @@ class UNetModel(nn.Module):
         time_steps: Tensor,
         *,
         context: Tensor = None,
-        writer_id: Union[Tensor, Tuple[int, ...]] = None,
+        writer_id: Optional[Union[Tensor, Tuple[int, ...]]] = None,
         interpolation: bool = False,
         mix_rate: float = None,
     ) -> Tensor:
-        if writer_id is None or self.n_style_classes is None:
+        if writer_id is not None and self.n_style_classes is None:
             raise RuntimeError(
                 "Writer_id must be specified if and only if the model is class-conditional"
             )
@@ -275,7 +275,11 @@ class UNetModel(nn.Module):
         t_emb = self.time_step_embedding(time_steps)
         t_emb = self.time_embed(t_emb)
 
-        if self.n_style_classes is not None and writer_id.size(0) != x.size(0):
+        if (
+            self.n_style_classes is not None
+            and writer_id is not None
+            and writer_id.size(0) != x.size(0)
+        ):
             raise RuntimeError(
                 f"Expected size to be {x.size(0)}, got {writer_id.size(0)}"
             )
@@ -285,11 +289,7 @@ class UNetModel(nn.Module):
                 raise ValueError(f"Invalid mix_rate value: {mix_rate}")
 
             t_emb = self.interpolation(writer_id, t_emb, mix_rate=mix_rate)
-        elif not isinstance(writer_id, Tensor):
-            raise TypeError(
-                f"Expected writer_id to be Tensor, got {type(writer_id).__name__}"
-            )
-        else:
+        elif writer_id is not None:
             t_emb = t_emb + self.label_emb(writer_id)
 
         if context is not None:
