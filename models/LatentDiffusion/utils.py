@@ -13,6 +13,8 @@ from torch import nn, Tensor
 from data.utils import uniquify
 from .activation import GeGLU
 
+T2PIL = torchvision.transforms.ToPILImage()
+
 
 class GroupNorm32(nn.GroupNorm):
     """
@@ -150,7 +152,8 @@ def generate_image(
     if image.size(0) == 1:
         image = rearrange(image, "1 c h w -> c h w")
 
-        image = torchvision.transforms.ToPILImage()(image)
+        image = T2PIL(image)
+        image = __crop_whitespaces(image)
         image = __change_image_colors(image, color=color)
 
         if path is not None:
@@ -159,12 +162,12 @@ def generate_image(
         return image
     elif is_fid:
         images = list(image)
-        images = [torchvision.transforms.ToPILImage()(image) for image in images]
+        images = [T2PIL(image) for image in images]
 
         return images
     else:
         images = list(image)
-        images = [torchvision.transforms.ToPILImage()(image) for image in images]
+        images = [T2PIL(image) for image in images]
         images = [__crop_whitespaces(image) for image in images]
         images = [__change_image_colors(image, color=color) for image in images]
         images = [
