@@ -204,8 +204,6 @@ def get_image(
         bbox = ImageOps.invert(img).getbbox()
         img = img.crop(bbox)
 
-    img = ImageOps.contain(img, size=(width, height), method=ImageModule.LANCZOS)
-
     return ImageOps.pad(
         image=img,
         method=ImageModule.LANCZOS,
