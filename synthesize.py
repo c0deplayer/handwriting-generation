@@ -74,12 +74,12 @@ def generate_handwriting() -> Union[Image, plt.Figure, List[Image], List[plt.Fig
     )
     model.eval()
 
-    save_path = Path(
-        f"{os.getcwd()}/images/{args.config}/{args.text.replace(' ', '-')}.jpeg"
-    )
-
     if args.config == "LatentDiffusion":
         print(f"Selected writer id: {args.writer}")
+
+        save_path = Path(
+            f"{os.getcwd()}/images/{args.config}/{args.text.replace(' ', '-')}-w{args.writer}.jpeg"
+        )
 
         return model.generate(
             args.text,
@@ -89,13 +89,25 @@ def generate_handwriting() -> Union[Image, plt.Figure, List[Image], List[plt.Fig
             color=args.color,
         )
 
-    return model.generate(
-        args.text,
-        save_path=save_path,
-        vocab=config.vocab,
-        color=args.color,
-        style_path=args.style_path,
+    save_path = Path(
+        f"{os.getcwd()}/images/{args.config}/{args.text.replace(' ', '-')}.jpeg"
     )
+
+    if args.config == "Diffusion":
+        return model.generate(
+            args.text,
+            save_path=save_path,
+            vocab=config.vocab,
+            color=args.color,
+            style_path=args.style_path,
+        )
+    else:
+        return model.generate(
+            args.text,
+            save_path=save_path,
+            vocab=config.vocab,
+            color=args.color,
+        )
 
 
 if __name__ == "__main__":
