@@ -57,6 +57,8 @@ def train_model():
     trainer_params = dict(
         accelerator=config.device,
         default_root_dir=config.checkpoint_path,
+        deterministic=True,
+        detect_anomaly=False,
         max_epochs=config.max_epochs,
         callbacks=[
             RichModelSummary(max_depth=5),
@@ -86,14 +88,13 @@ def train_model():
             {
                 "gradient_clip_val": config.clip_grad,
                 "gradient_clip_algorithm": config.clip_algorithm,
+                "max_steps": config.max_epochs,
             }
         )
 
-    elif args.config == "RNN":
-        # TODO: ?
-        attention_scale = 1.0 / (config.max_seq_len / config.max_text_len)
-        print(f"Attention scale: {attention_scale}")
+        del trainer_params["max_epochs"]
 
+    elif args.config == "RNN":
         model_params = dict(
             input_size=config.input_size,
             hidden_size=config.hidden_size,
@@ -101,7 +102,6 @@ def train_model():
             num_mixture=config.num_mixture,
             vocab_size=config.vocab_size,
             bias=config.bias,
-            attention_scale=attention_scale,
             clip_grads=(config.lstm_clip, config.mdn_clip),
         )
 
@@ -137,6 +137,7 @@ def train_model():
     if config.device == "cuda" and args.remote:
         torch.set_float32_matmul_precision("high")
         trainer_params["devices"] = [0]
+        # trainer_params["precision"] = "bf16-mixed"
 
     model = MODELS[args.config](**model_params)
     dataset = DATASETS[args.config]
