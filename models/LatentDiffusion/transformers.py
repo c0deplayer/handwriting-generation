@@ -10,7 +10,7 @@ class BasicTransformerBlock(nn.Module):
     """
     _summary_
     """
-    
+
     def __init__(
         self,
         d_model: int,
@@ -36,7 +36,7 @@ class BasicTransformerBlock(nn.Module):
         d_cond : int, optional
             _description_, by default None
         """
-        
+
         super().__init__()
 
         self.attention_0 = CrossAttention(
@@ -77,7 +77,7 @@ class BasicTransformerBlock(nn.Module):
         Tensor
             _description_
         """
-        
+
         x = self.attention_0(self.norm_0(x)) + x
         x = self.attention_1(self.norm_1(x), context=context) + x
         x = self.ff_net(self.norm_2(x)) + x
@@ -89,7 +89,7 @@ class SpatialTransformer(nn.Module):
     """
     _summary_
     """
-    
+
     def __init__(
         self,
         channels: int,
@@ -118,7 +118,7 @@ class SpatialTransformer(nn.Module):
         d_cond : int, optional
             _description_, by default None
         """
-        
+
         super().__init__()
 
         self.channels = channels
@@ -164,7 +164,7 @@ class SpatialTransformer(nn.Module):
         Tensor
             _description_
         """
-        
+
         _, _, h, w = x.shape
         x_in = x
 

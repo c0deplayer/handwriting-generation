@@ -140,12 +140,12 @@ def diffusion_step(
         _description_
     """
 
-    strokes_t_minus = (strokes - torch.sqrt(1 - alpha) * eps) / torch.sqrt(1 - beta)
-    strokes_t_minus += torch.randn(strokes.shape, device=strokes.device) * torch.sqrt(
+    strokes_minus = (strokes - torch.sqrt(1 - alpha) * eps) / torch.sqrt(1 - beta)
+    strokes_minus += torch.randn(strokes.shape, device=strokes.device) * torch.sqrt(
         1 - alpha_next
     )
 
-    return strokes_t_minus
+    return strokes_minus
 
 
 def generate_stroke_image(
