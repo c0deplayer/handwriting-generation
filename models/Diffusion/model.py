@@ -106,7 +106,7 @@ class DiffusionModel(nn.Module):
             ]
         )
 
-        self.up_sample = nn.Upsample(scale_factor=2)
+        self.up_sample = nn.Upsample(scale_factor=2, mode="nearest")
         self.skip_conv_2 = nn.Conv1d(c3, c2 * 2, 3, padding="same")
         self.dec_2 = ConvBlock(c1, c2 * 2, c3)
 
@@ -214,10 +214,10 @@ class DiffusionWrapper(pl.LightningModule):
             self.ema = ExponentialMovingAverage(
                 self.diffusion_model,
                 beta=0.995,
-                update_after_step=10000,
-                update_every=10,
+                update_after_step=2000,
+                update_every=1,
                 inv_gamma=1.0,
-                power=0.8,
+                power=1.0,
             )
         else:
             self.ema = None
@@ -231,7 +231,8 @@ class DiffusionWrapper(pl.LightningModule):
             self.ema.update()
 
     def on_fit_start(self) -> None:
-        pl.seed_everything(seed=42)
+        torch.autograd.profiler.emit_nvtx(False)
+        torch.autograd.profiler.profile(False)
 
     def forward(self, batch: Tuple[Tensor, ...]) -> Tuple[Tensor, Tensor, Tensor]:
         return self.diffusion_model(batch)
@@ -251,17 +252,15 @@ class DiffusionWrapper(pl.LightningModule):
         loss_batch = (eps, strokes_pred, pen_lifts, pen_lifts_pred, alphas)
         loss, mse_loss, bce_loss = self.loss(loss_batch)
 
-        self.log("train/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("train/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
         self.log(
             "train/mse_strokes",
             mse_loss,
-            on_step=False,
+            on_step=True,
             on_epoch=True,
             prog_bar=False,
         )
-        self.log(
-            "train/bce_eos", bce_loss, on_step=False, on_epoch=True, prog_bar=False
-        )
+        self.log("train/bce_eos", bce_loss, on_step=True, on_epoch=True, prog_bar=False)
 
         return loss
 
@@ -281,24 +280,24 @@ class DiffusionWrapper(pl.LightningModule):
             loss_batch = (eps, strokes_pred, pen_lifts, pen_lifts_pred, alphas)
             loss, mse_loss, bce_loss = self.loss(loss_batch)
 
-            self.log("val/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
+            self.log("val/loss", loss, on_step=True, on_epoch=True, prog_bar=True)
             self.log(
                 "val/mse_strokes",
                 mse_loss,
-                on_step=False,
+                on_step=True,
                 on_epoch=True,
                 prog_bar=False,
             )
             self.log(
-                "val/bce_eos", bce_loss, on_step=False, on_epoch=True, prog_bar=False
+                "val/bce_eos", bce_loss, on_step=True, on_epoch=True, prog_bar=False
             )
 
             self.log(
                 "val/mae_strokes",
                 F.l1_loss(strokes_pred, strokes, reduction="mean"),
-                on_step=False,
+                on_step=True,
                 on_epoch=True,
-                prog_bar=True,
+                prog_bar=False,
             )
             self.log(
                 "val/mae_eos",
@@ -307,31 +306,35 @@ class DiffusionWrapper(pl.LightningModule):
                     pen_lifts,
                     reduction="mean",
                 ),
-                on_step=False,
+                on_step=True,
                 on_epoch=True,
-                prog_bar=True,
+                prog_bar=False,
             )
 
         return loss
 
-    def configure_optimizers(self) -> Dict[str, Union[Optimizer, LRScheduler]]:
+    def configure_optimizers(
+        self,
+    ) -> Dict[str, Union[Optimizer, Dict[str, Union[LRScheduler, str, int]]]]:
         optimizer = torch.optim.AdamW(
             self.parameters(),
-            lr=1e-4,
+            lr=1e-3,
             betas=(0.9, 0.98),
-            weight_decay=1e-5,
         )
-        lr_scheduler = InverseSqrtScheduler(
+        scheduler = InverseSqrtScheduler(
             optimizer=optimizer,
             lr_mul=1.0,
             d_model=256,
             n_warmup_steps=10000,
-            verbose=True,
         )
 
         return {
             "optimizer": optimizer,
-            "lr_scheduler": lr_scheduler,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "step",
+                "frequency": 1,
+            },
         }
 
     @staticmethod
@@ -396,8 +399,6 @@ class DiffusionWrapper(pl.LightningModule):
             _description_
         """
 
-        pl.seed_everything(seed=42)
-
         if not is_fid:
             style_path = Path(f"assets/{style_path}")
             style_extractor = StyleExtractor(device=self.device)
@@ -420,31 +421,32 @@ class DiffusionWrapper(pl.LightningModule):
             text = sequence.clone()
             style_vector = style_path
 
-        time_steps = text.size(1) * 16
+        time_steps = (text.size(1) - 2) * 16
         time_steps = time_steps - (time_steps % 8) + 8
         batch_size = text.size(0)
         beta_len = len(self.beta)
         strokes = torch.randn((batch_size, time_steps, 2), device=self.device)
 
         with torch.no_grad():
-            for i in track(reversed(range(beta_len))):
+            for i in track(range(beta_len - 1, -1, -1)):
                 alpha = self.alpha[i] * torch.ones(
                     (batch_size, 1, 1), device=self.device
                 )
                 beta = self.beta[i] * torch.ones((batch_size, 1, 1), device=self.device)
                 alpha_next = (
                     self.alpha[i - 1]
-                    if i > 0
+                    if i > 1
                     else torch.tensor([1.0], device=self.device)
                 )
                 batch = (strokes, text, torch.sqrt(alpha), style_vector)
 
-                model_out, pen_lifts, _ = (
-                    self.ema(batch) if self.use_ema else self(batch)
-                )
-                strokes = utils.diffusion_step(
-                    strokes, model_out, beta, alpha, alpha_next
-                )
+                with torch.no_grad():
+                    model_out, pen_lifts, _ = (
+                        self.ema(batch) if self.use_ema else self(batch)
+                    )
+                    strokes = utils.diffusion_step(
+                        strokes, model_out, beta, alpha, alpha_next
+                    )
 
         strokes = torch.cat([strokes, pen_lifts], dim=-1)
 
