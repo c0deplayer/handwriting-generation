@@ -165,8 +165,14 @@ cython_debug/
 # Visual Studio Code
 .vscode/
 
-# Dataset files
-raw_data/
+# Data splits
+raw_data/*
+!raw_data/IAMDB/
+raw_data/IAMDB/*
+!raw_data/IAMDB/*.filter
+!raw_data/IAMonDB/
+raw_data/IAMonDB/*
+!raw_data/IAMonDB/*.filter
 
 # Training information and model checkpoints
 model_checkpoints/
