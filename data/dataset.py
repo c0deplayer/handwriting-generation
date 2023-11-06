@@ -8,7 +8,7 @@ import torchvision.transforms
 from einops import rearrange
 from rich.progress import track
 from torch import Tensor
-from torch.utils.data import DataLoader, Dataset, random_split
+from torch.utils.data import DataLoader, Dataset
 
 from configs.config import ConfigDiffusion, ConfigLatentDiffusion, ConfigRNN
 from models.Diffusion.text_style import StyleExtractor
@@ -60,36 +60,22 @@ class DataModule(pl.LightningDataModule):
     # noinspection PyCallingNonCallable
     def setup(self, stage: str) -> None:
         if stage == "fit":
-            if isinstance(self.__config, ConfigLatentDiffusion):
-                self.train_dataset = self.dataset(
-                    config=self.__config,
-                    img_height=self.img_height,
-                    img_width=self.img_width,
-                    max_text_len=self.max_text_len,
-                    max_files=self.train_size * self.max_files,
-                    dataset_type="train",
-                )
-                self.val_dataset = self.dataset(
-                    config=self.__config,
-                    img_height=self.img_height,
-                    img_width=self.img_width,
-                    max_text_len=self.max_text_len,
-                    max_files=self.val_size * self.max_files,
-                    dataset_type="val",
-                )
-            else:
-                iam_full = self.dataset(
-                    config=self.__config,
-                    img_height=self.img_height,
-                    img_width=self.img_width,
-                    max_text_len=self.max_text_len,
-                    max_seq_len=self.max_seq_len,
-                    max_files=self.max_files,
-                )
+            kwargs_dataset = dict(
+                config=self.__config,
+                img_height=self.img_height,
+                img_width=self.img_width,
+                max_text_len=self.max_text_len,
+                max_files=self.train_size * self.max_files,
+                dataset_type="train",
+            )
+            if isinstance(self.__config, (ConfigDiffusion, ConfigRNN)):
+                kwargs_dataset["max_seq_len"] = self.max_seq_len
 
-                self.train_dataset, self.val_dataset = random_split(
-                    iam_full, [self.train_size, self.val_size]
-                )
+            self.train_dataset = self.dataset(**kwargs_dataset)
+
+            kwargs_dataset["max_files"] = self.val_size * self.max_files
+            kwargs_dataset["dataset_type"] = "val"
+            self.val_dataset = self.dataset(**kwargs_dataset)
 
     def train_dataloader(self) -> DataLoader:
         return DataLoader(
@@ -114,7 +100,7 @@ class DummyDataset(Dataset):
     def __init__(self) -> None:
         super().__init__()
 
-    def __load_dataset(self) -> None:
+    def __load_dataset__(self) -> None:
         pass
 
     def preprocess_data(self) -> List[Dict[str, Any]]:
@@ -136,6 +122,7 @@ class IAMonDataset(Dataset):
         max_seq_len: int,
         max_files: int,
         config: Union[ConfigDiffusion, ConfigRNN],
+        dataset_type: Literal["train", "val", "test"],
     ) -> None:
         """
         _summary_
@@ -173,15 +160,26 @@ class IAMonDataset(Dataset):
         self.style_extractor = StyleExtractor(device=torch.device(config.device))
         self.tokenizer = Tokenizer(config.vocab)
 
-        with open(f"{config.data_path}/dataset.txt", mode="r") as f:
+        self.dataset_type = dataset_type
+
+        type_dict = {
+            "train": "iamondb_tr_va1.filter",
+            "val": "iamondb_va2.filter",
+            "test": "iamondb_test.filter",
+        }
+
+        with open(f"{config.data_path}/{type_dict[dataset_type]}", mode="r") as f:
             self.dataset_txt = f.readlines()
 
         self.__load_dataset__()
         print(f"Size of dataset: {len(self.dataset)}")
 
-    def __load_dataset__(self) -> None:
-        h5_file_path = Path("data/h5_dataset/train_val_iamondb.h5")
+        if not self.diffusion:
+            self._mean = utils.compute_mean(self.dataset)
+            self._std = utils.compute_std(self.dataset)
 
+    def __load_dataset__(self) -> None:
+        h5_file_path = Path(f"./data/h5_dataset/{self.dataset_type}_iamondb.h5")
         if h5_file_path.is_file():
             self.__dataset, _ = utils.load_dataset((h5_file_path, None), self.max_files)
         else:
@@ -202,12 +200,17 @@ class IAMonDataset(Dataset):
         ascii_path = raw_data_path / "ascii"
         strokes_path = raw_data_path / "lineStrokes"
         img_path = raw_data_path / "lineImages"
+        original_path = raw_data_path / "original-xml"
 
         for line in track(
-            self.dataset_txt, description="Preparing IAM Online DataLoader..."
+            self.dataset_txt,
+            description=f"Preparing {self.dataset_type} IAM Online DataLoader...",
         ):
-            writer_id, idx = line.strip().split(",")
+            idx = line.strip()
             path_txt = ascii_path / f"{idx[:3]}/{idx[:7]}/{idx}.txt"
+            path_file_original_xml = original_path / f"{idx[:3]}/{idx[:7]}"
+
+            writer_id = utils.get_writer_id(path_file_original_xml, idx)
 
             transcription = utils.get_transcription(path_txt)
 
@@ -218,14 +221,16 @@ class IAMonDataset(Dataset):
                 path_file_xml = strokes_path / f"{idx[:3]}/{idx[:7]}/{file}.xml"
                 path_file_tif = img_path / f"{idx[:3]}/{idx[:7]}/{file}.tif"
 
-                strokes = utils.get_line_strokes(path_file_xml, self.max_seq_len)
+                strokes = utils.get_line_strokes(
+                    path_file_xml, self.max_seq_len, diffusion=self.diffusion
+                )
 
                 one_hot, text = utils.get_encoded_text_with_one_hot_encoding(
                     raw_text, self.tokenizer, self.max_text_len
                 )
 
                 image = utils.get_image(
-                    path_file_tif, self.img_width, self.img_height, centering=(0.5, 0.5)
+                    path_file_tif, self.img_width, self.img_height, centering=(0.0, 0.5)
                 )
 
                 if strokes is None or image is None:
@@ -264,6 +269,20 @@ class IAMonDataset(Dataset):
     def dataset(self) -> List[Dict[str, Any]]:
         return self.__dataset
 
+    @property
+    def mean(self) -> Tensor:
+        return self._mean
+
+    @property
+    def std(self) -> Tensor:
+        return self._std
+
+    def normalize(self, strokes: Tensor) -> Tensor:
+        return (strokes - self.mean) / self.std
+
+    def denormalize(self, strokes: Tensor) -> Tensor:
+        return strokes * self.std + self.mean
+
     def __getitem__(self, index: int) -> Tuple[Tensor, ...]:
         if self.diffusion:
             strokes = torch.tensor(self.dataset[index]["strokes"], dtype=torch.float32)
@@ -275,6 +294,8 @@ class IAMonDataset(Dataset):
         else:
             strokes = torch.tensor(self.dataset[index]["strokes"], dtype=torch.float32)
             text = torch.tensor(self.dataset[index]["one_hot"], dtype=torch.float32)
+
+            strokes[1:, :] = self.normalize(strokes[1:, :])
 
             return strokes, text
 
@@ -317,12 +338,14 @@ class IAMDataset(Dataset):
             self.dataset_txt = f.readlines()
 
         self.__load_data__()
-        print(f"Length of writer styles -- {len(self.map_writer_id)}")
+        print(
+            f"Size of dataset: {len(self.dataset)} || Length of writer styles -- {len(self.map_writer_id)}"
+        )
 
     def __load_data__(self) -> None:
-        h5_file_path = Path(f"data/h5_dataset/{self.dataset_type}_iamdb.h5")
+        h5_file_path = Path(f"./data/h5_dataset/{self.dataset_type}_iamdb.h5")
         json_file_path = Path(
-            f"data/json_writer_ids/{self.dataset_type}_writer_ids.json"
+            f"./data/json_writer_ids/{self.dataset_type}_writer_ids.json"
         )
 
         if h5_file_path.is_file() and json_file_path.is_file():

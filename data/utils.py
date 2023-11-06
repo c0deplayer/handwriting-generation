@@ -288,6 +288,27 @@ def __pad_strokes(
     return padded_strokes
 
 
+def get_writer_id(path: Path, idx: str) -> int:
+    writer_id = 0
+
+    for file in path.glob("*.xml"):
+        root = ET.parse(file).getroot()
+
+        general_tag = root.find("General")
+        if general_tag is None:
+            continue
+
+        form_id = general_tag[0].attrib.get("id", None)
+
+        if form_id is None or form_id != idx:
+            continue
+
+        writer_id = int(general_tag[0].attrib.get("writerID", "0"))
+        break
+
+    return writer_id
+
+
 def get_max_seq_len(strokes_path: Path) -> int:
     """
     _summary_

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import yaml
 
+from configs.config import ConfigLatentDiffusion
 from configs.settings import CONFIGS, DATASETS
 from data import utils
 
@@ -32,67 +33,59 @@ def cli_main():
 
 
 def prepare_data():
+    is_latent = isinstance(config, ConfigLatentDiffusion)
+    train_size = config.get("train_size", 0.8)
+    val_size = 1.0 - train_size
+    kwargs_dataset = dict(
+        config=config,
+        img_height=config.get("img_height", 90),
+        img_width=config.get("img_width", 1400),
+        max_text_len=config.max_text_len,
+        max_files=train_size * config.max_files,
+        dataset_type="train",
+    )
+    h5_file_path_train = Path(
+        f"./data/h5_dataset/train_{'iamondb' if args.config in ('Diffusion', 'RNN') else 'iamdb'}.h5"
+    )
+    h5_file_path_val = Path(
+        f"./data/h5_dataset/val_{'iamondb' if args.config in ('Diffusion', 'RNN') else 'iamdb'}.h5"
+    )
+
     if args.config in ("Diffusion", "RNN"):
-        h5_file_path = Path(
-            f"data/h5_dataset/train_val_iamondb_{args.config.lower()}.h5"
-        )
-        with contextlib.suppress(FileNotFoundError):
-            os.remove(h5_file_path)
+        json_file_path_train = None
+        json_file_path_val = None
 
-        kwargs_dataset = dict(
-            config=config,
-            img_height=config.get("img_height", 90),
-            img_width=config.get("img_width", 1400),
-            max_text_len=config.max_text_len,
-            max_seq_len=config.max_seq_len,
-            max_files=config.max_files,
-        )
-        dataset = DATASETS[args.config](**kwargs_dataset)
-        utils.save_dataset(dataset.dataset, (h5_file_path, None))
-
+        kwargs_dataset["max_seq_len"] = config.max_seq_len
     else:
-        train_size = config.get("train_size", 0.85)
-        val_size = 1.0 - train_size
-        h5_file_path = Path("data/h5_dataset/train_iamdb.h5")
-        json_file_path = Path("data/json_writer_ids/train_writer_ids.json")
+        json_file_path_train = Path("data/json_writer_ids/train_writer_ids.json")
+        json_file_path_val = Path("data/json_writer_ids/val_writer_ids.json")
 
-        with contextlib.suppress(FileNotFoundError):
-            os.remove(h5_file_path)
-            os.remove(json_file_path)
+    with contextlib.suppress(FileNotFoundError):
+        os.remove(h5_file_path_train)
+        os.remove(h5_file_path_val)
+        os.remove(json_file_path_train)
+        os.remove(json_file_path_val)
 
-        kwargs_dataset = dict(
-            config=config,
-            img_height=config.get("img_height", 90),
-            img_width=config.get("img_width", 1400),
-            max_text_len=config.max_text_len,
-            max_files=train_size * config.max_files,
-            dataset_type="train",
-        )
+    dataset = DATASETS[args.config](**kwargs_dataset)
 
-        dataset = DATASETS[args.config](**kwargs_dataset)
-        utils.save_dataset(
-            dataset.dataset,
-            (h5_file_path, json_file_path),
-            latent=True,
-            map_writer_ids=dataset.map_writer_id,
-        )
+    utils.save_dataset(
+        dataset.dataset,
+        (h5_file_path_train, json_file_path_train),
+        is_latent=is_latent,
+        map_writer_ids=dataset.map_writer_id if is_latent else None,
+    )
 
-        h5_file_path = Path("data/h5_dataset/val_iamdb.h5")
-        json_file_path = Path("data/json_writer_ids/val_writer_ids.json")
-        with contextlib.suppress(FileNotFoundError):
-            os.remove(h5_file_path)
-            os.remove(json_file_path)
+    kwargs_dataset["max_files"] = val_size * config.max_files
+    kwargs_dataset["dataset_type"] = "val"
 
-        kwargs_dataset["max_files"] = val_size * config.max_files
-        kwargs_dataset["dataset_type"] = "val"
+    dataset = DATASETS[args.config](**kwargs_dataset)
 
-        dataset = DATASETS[args.config](**kwargs_dataset)
-        utils.save_dataset(
-            dataset.dataset,
-            (h5_file_path, json_file_path),
-            latent=True,
-            map_writer_ids=dataset.map_writer_id,
-        )
+    utils.save_dataset(
+        dataset.dataset,
+        (h5_file_path_val, json_file_path_val),
+        is_latent=is_latent,
+        map_writer_ids=dataset.map_writer_id if is_latent else None,
+    )
 
 
 if __name__ == "__main__":
