@@ -73,6 +73,7 @@ def generate_handwriting() -> Union[Image, plt.Figure, List[Image], List[plt.Fig
         map_location=torch.device(config.device),
     )
     model.eval()
+    # seed_everything(seed=42)
 
     if args.config == "LatentDiffusion":
         print(f"Selected writer id: {args.writer}")
@@ -84,6 +85,7 @@ def generate_handwriting() -> Union[Image, plt.Figure, List[Image], List[plt.Fig
         return model.generate(
             args.text,
             vocab=config.vocab,
+            max_text_len=config.max_text_len,
             writer_id=args.writer,
             save_path=save_path,
             color=args.color,
@@ -97,6 +99,7 @@ def generate_handwriting() -> Union[Image, plt.Figure, List[Image], List[plt.Fig
         return model.generate(
             args.text,
             save_path=save_path,
+            max_text_len=config.max_text_len,
             vocab=config.vocab,
             color=args.color,
             style_path=args.style_path,
@@ -105,6 +108,7 @@ def generate_handwriting() -> Union[Image, plt.Figure, List[Image], List[plt.Fig
         return model.generate(
             args.text,
             save_path=save_path,
+            max_text_len=config.max_text_len,
             vocab=config.vocab,
             color=args.color,
         )

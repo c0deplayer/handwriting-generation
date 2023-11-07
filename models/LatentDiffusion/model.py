@@ -332,6 +332,7 @@ class LatentDiffusionModel(pl.LightningModule):
         self,
         text_line: Union[str, Tensor],
         vocab: str,
+        max_text_len: int,
         writer_id: Union[int, Tuple[int, ...], Tensor],
         *,
         color: str,
@@ -389,7 +390,7 @@ class LatentDiffusionModel(pl.LightningModule):
 
             for word in words:
                 _, word_enc = get_encoded_text_with_one_hot_encoding(
-                    word, tokenizer=tokenizer, max_len=8
+                    word, tokenizer=tokenizer, max_len=max_text_len
                 )
                 word_tensor = torch.tensor(
                     word_enc, dtype=torch.long, device=self.device

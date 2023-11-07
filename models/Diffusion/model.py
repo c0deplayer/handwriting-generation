@@ -372,6 +372,7 @@ class DiffusionWrapper(pl.LightningModule):
         self,
         sequence: Union[str, Tensor],
         vocab: str,
+        max_text_len: int,
         *,
         color: str,
         save_path: Union[str, None],
@@ -417,7 +418,7 @@ class DiffusionWrapper(pl.LightningModule):
             style_vector = style_vector.to(device=self.device)
 
             _, text = get_encoded_text_with_one_hot_encoding(
-                sequence, tokenizer=Tokenizer(vocab), max_len=0
+                sequence, tokenizer=Tokenizer(vocab), max_len=max_text_len
             )
             text = rearrange(torch.tensor(text, device=self.device), "v -> 1 v")
         else:
