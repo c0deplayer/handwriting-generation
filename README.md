@@ -92,7 +92,7 @@ options:
 ### full_sample.py
 
 ```
-full_sample.py [-h] -c {RNN,Diffusion,LatentDiffusion} [-cf CONFIG_FILE]
+full_sample.py [-h] -c {Diffusion,LatentDiffusion} [-cf CONFIG_FILE] [--strict]
 
 options:
   -h, --help            show this help message and exit
@@ -100,6 +100,7 @@ options:
                         Type of model
   -cf CONFIG_FILE, --config-file CONFIG_FILE
                         Filename for configs
+  --strict              Strict mode for a dataset that excludes OOV words
 ```
 
 ## References
