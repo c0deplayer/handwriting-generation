@@ -123,6 +123,8 @@ class IAMonDataset(Dataset):
         max_files: int,
         config: Union[ConfigDiffusion, ConfigRNN],
         dataset_type: Literal["train", "val", "test"],
+        *,
+        strict: bool = False,
     ) -> None:
         """
         _summary_
@@ -146,6 +148,7 @@ class IAMonDataset(Dataset):
         super().__init__()
 
         self.__config = config
+        self._strict = strict
         self.img_height = img_height
         self.img_width = img_width
         self.max_seq_len = (
@@ -180,7 +183,7 @@ class IAMonDataset(Dataset):
 
     def __load_dataset__(self) -> None:
         h5_file_path = Path(f"./data/h5_dataset/{self.dataset_type}_iamondb.h5")
-        if h5_file_path.is_file():
+        if h5_file_path.is_file() and not self._strict:
             self.__dataset, _ = utils.load_dataset((h5_file_path, None), self.max_files)
         else:
             self.__dataset = self.preprocess_data()
@@ -216,6 +219,9 @@ class IAMonDataset(Dataset):
 
             for file, raw_text in transcription.items():
                 if len(raw_text) > self.max_text_len:
+                    continue
+
+                if self._strict and not all(c in self.config.vocab for c in raw_text):
                     continue
 
                 path_file_xml = strokes_path / f"{idx[:3]}/{idx[:7]}/{file}.xml"
@@ -312,8 +318,11 @@ class IAMDataset(Dataset):
         max_text_len: int,
         max_files: int,
         dataset_type: Literal["train", "val", "test"],
+        *,
+        strict: bool = False,
     ) -> None:
         self.__config = config
+        self._strict = strict
         self.max_text_len = max_text_len
         self.max_files = max_files
         self.transforms = torchvision.transforms.Compose(
@@ -348,7 +357,7 @@ class IAMDataset(Dataset):
             f"./data/json_writer_ids/{self.dataset_type}_writer_ids.json"
         )
 
-        if h5_file_path.is_file() and json_file_path.is_file():
+        if h5_file_path.is_file() and json_file_path.is_file() and not self._strict:
             self.__dataset, self.__map_writer_id = utils.load_dataset(
                 (h5_file_path, json_file_path), self.max_files, latent=True
             )
@@ -377,6 +386,9 @@ class IAMDataset(Dataset):
             label = parts[1].rstrip()
 
             if len(label) > self.max_text_len:
+                continue
+
+            if self._strict and not all(c in self.config.vocab for c in label):
                 continue
 
             image_parts = image_id.split("-")

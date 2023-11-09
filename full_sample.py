@@ -44,6 +44,12 @@ def cli_main():
         default="base_gpu.yaml",
     )
 
+    parser.add_argument(
+        "--strict",
+        help="Strict mode for a dataset that excludes OOV words",
+        action="store_true",
+    )
+
     return parser.parse_args()
 
 
@@ -58,6 +64,7 @@ def full_sampling():
         max_text_len=config.max_text_len,
         max_files=config.max_files,
         dataset_type="train",
+        strict=args.strict,
     )
 
     device = torch.device(config.device)
