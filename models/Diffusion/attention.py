@@ -12,23 +12,23 @@ from .utils import FeedForwardNetwork
 
 class PrepareForMultiHeadAttention(nn.Module):
     """
-    _summary_
+    This module is used to prepare input tensors for multi-head attention.
+    It applies a linear transformation to the input to ensure
+    that it has the correct dimensions for multi-head attention.
+
+    Args:
+        d_model (int): The input feature dimension.
+        heads (int): The number of attention heads.
+        bias (bool, optional): If True, adds a learnable bias to the linear transformation.
+            (default: True)
+
+    Attributes:
+        d_model (int): The input feature dimension.
+        heads (int): The number of attention heads.
+        linear (nn.Linear): Linear layer used for dimension transformation.
     """
 
     def __init__(self, d_model: int, heads: int, *, bias: bool = True) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        d_model : int
-            _description_
-        heads : int
-            _description_
-        bias : bool, optional
-            _description_, by default True
-        """
-
         super().__init__()
 
         self.d_model = d_model
@@ -37,37 +37,19 @@ class PrepareForMultiHeadAttention(nn.Module):
         self.linear = nn.Linear(d_model, d_model, bias=bias)
 
     def forward(self, x: Tensor) -> Tensor:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        x : Tensor
-            _description_
-
-        Returns
-        -------
-        Tensor
-            _description_
-        """
-
         x = self.linear(x)
 
         return self.split_heads(x)
 
     def split_heads(self, x: Tensor) -> Tensor:
         """
-        _summary_
+        Split the tensor into multiple attention heads.
 
-        Parameters
-        ----------
-        x : Tensor
-            _description_
+        Args:
+            x (Tensor): Transformed input tensor with shape (batch size, sequence length, d_model).
 
-        Returns
-        -------
-        Tensor
-            _description_
+        Returns:
+            Tensor: Tensor with shape (batch size, number of heads, sequence length, feature dimension per head).
         """
 
         return rearrange(
@@ -81,7 +63,22 @@ class PrepareForMultiHeadAttention(nn.Module):
 
 class MultiHeadAttention(nn.Module):
     """
-    _summary_
+    Multi-Head Attention allows the model to focus on different parts of the input sequence in parallel, enabling
+    improved modeling of long-range dependencies.
+
+    Args:
+        d_model (int): The input feature dimension.
+        heads (int): The number of attention heads.
+        dropout (float, optional): The dropout probability. (default: 0.1)
+        bias (bool, optional): If True, adds a learnable bias to linear transformations.
+            (default: True)
+        return_weights (bool, optional): If True, returns attention weights in addition to
+            the output. (default: True)
+
+    Attributes:
+        d_model (int): The input feature dimension.
+        heads (int): The number of attention heads.
+        return_weights (bool): Whether to return attention weights.
     """
 
     def __init__(
@@ -93,23 +90,6 @@ class MultiHeadAttention(nn.Module):
         bias: bool = True,
         return_weights: bool = True,
     ) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        d_model : int
-            _description_
-        heads : int
-            _description_
-        dropout : float, optional
-            _description_, by default 0.1
-        bias : bool, optional
-            _description_, by default True
-        return_weights : bool, optional
-            _description_, by default True
-        """
-
         super().__init__()
 
         self.d_model = d_model
@@ -126,26 +106,6 @@ class MultiHeadAttention(nn.Module):
     def forward(
         self, q: Tensor, k: Tensor, v: Tensor, *, mask: Tensor = None
     ) -> Union[Tuple[Tensor, Tensor], Tensor]:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        q : Tensor
-            _description_
-        k : Tensor
-            _description_
-        v : Tensor
-            _description_
-        mask : Tensor, optional
-            _description_, by default None
-
-        Returns
-        -------
-        Union[Tuple[Tensor, Tensor], Tensor]
-            _description_
-        """
-
         query = self.query(q)
         key = self.key(k)
         value = self.value(v)
@@ -175,23 +135,17 @@ class MultiHeadAttention(nn.Module):
         q: Tensor, k: Tensor, v: Tensor, *, mask: Tensor = None
     ) -> Tuple[Tensor, Tensor]:
         """
-        _summary_
+        Compute scaled dot-product attention.
 
-        Parameters
-        ----------
-        q : Tensor
-            _description_
-        k : Tensor
-            _description_
-        v : Tensor
-            _description_
-        mask : Tensor, optional
-            _description_, by default None
+        Args:
+            q (Tensor): Query tensor of shape (batch size, number of heads, sequence length, feature dimension per head).
+            k (Tensor): Key tensor of shape (batch size, number of heads, sequence length, feature dimension per head).
+            v (Tensor): Value tensor of shape (batch size, number of heads, sequence length, feature dimension per head).
+            mask (Tensor, optional): Optional mask tensor for sequence masking.
+                (default: None)
 
-        Returns
-        -------
-        Tuple[Tensor, Tensor]
-            _description_
+        Returns:
+            Tuple[Tensor, Tensor]: The output tensor and the attention weights tensor.
         """
 
         scores = q @ k.transpose(-2, -1)
@@ -208,25 +162,26 @@ class MultiHeadAttention(nn.Module):
 
 class AffineTransformLayer(nn.Module):
     """
-    _summary_
+    The AffineTransformLayer applies a learnable affine transformation to its input data.
+    It consists of two linear layers, one for scaling (gamma) and one for shifting (beta).
+    These parameters are learned during training.
+
+    Args:
+        in_features (int): Number of input features.
+        out_features (int): Number of output features.
+        channel_first_input (bool, optional): If True, the input tensor has channels in
+            the first dimension (C x H x W). If False, the input tensor has channels
+            in the last dimension (H x W x C). (default: False)
+
+    Attributes:
+        gamma (nn.Linear): Linear layer for scaling (gamma) transformation.
+        beta (nn.Linear): Linear layer for shifting (beta) transformation.
+        channel_first_input (bool): Indicates the input tensor format.
     """
 
     def __init__(
         self, in_features: int, out_features: int, channel_first_input: bool = False
     ) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        in_features : int
-            _description_
-        out_features : int
-            _description_
-        channel_first_input : bool, optional
-            _description_, by default False
-        """
-
         super().__init__()
 
         self.gamma = nn.Linear(in_features, out_features)
@@ -237,22 +192,6 @@ class AffineTransformLayer(nn.Module):
         self.gamma.bias.data.fill_(1.0)
 
     def forward(self, x: Tensor, sigma: Tensor) -> Tensor:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        x : Tensor
-            _description_
-        sigma : Tensor
-            _description_
-
-        Returns
-        -------
-        Tensor
-            _description_
-        """
-
         gammas = self.gamma(sigma)
         betas = self.beta(sigma)
 
@@ -266,7 +205,33 @@ class AffineTransformLayer(nn.Module):
 
 class AttentionBlock(nn.Module):
     """
-    _summary_
+    The AttentionBlock applies multi-head self-attention mechanisms to the input data and computes attention weights.
+    The block consists of multiple layers, including multi-head attention, positional encoding, feedforward layers,
+    and affine transformations.
+
+    Args:
+        in_features (int): Number of input features.
+        d_model (int): Model dimensionality, representing the size of embedding vectors.
+        num_heads (int): Number of attention heads.
+        drop_rate (float, optional): Dropout rate to apply between layers. (default: 0.1)
+        pos_factor (int, optional): Positional encoding factor. (default: 1)
+        swap_channel_layer (bool, optional): If True, input channels are swapped during
+            processing. (default: True)
+
+    Attributes:
+        swap_channel_layer (bool): Indicates whether the channel swapping layer is used.
+        text_pos (Tensor): Textual positional encoding.
+        stroke_pos (Tensor): Stroke positional encoding.
+        dense_layer (nn.Linear): Linear layer for feature dimension adjustment.
+        layer_norm (nn.LayerNorm): Layer normalization.
+        affine_0 (AffineTransformLayer): Affine transformation layer 0.
+        mha_0 (nn.MultiheadAttention): First multi-head self-attention mechanism.
+        affine_1 (AffineTransformLayer): Affine transformation layer 1.
+        mha_1 (nn.MultiheadAttention): Second multi-head self-attention mechanism.
+        affine_2 (AffineTransformLayer): Affine transformation layer 2.
+        ff_network (FeedForwardNetwork): Feedforward network.
+        dropout (nn.Dropout): Dropout layer.
+        affine_3 (AffineTransformLayer): Affine transformation layer 3.
     """
 
     def __init__(
@@ -279,25 +244,6 @@ class AttentionBlock(nn.Module):
         pos_factor: int = 1,
         swap_channel_layer: bool = True,
     ) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        in_features: int
-            _description_
-        d_model : int
-            _description_
-        num_heads : int
-            _description_
-        drop_rate : float, optional
-            _description_, by default 0.1
-        pos_factor : int, optional
-            _description_, by default 1
-        swap_channel_layer : bool, optional
-            _description_, by default True
-        """
-
         super().__init__()
 
         self.swap_channel_layer = swap_channel_layer
@@ -321,25 +267,6 @@ class AttentionBlock(nn.Module):
     def forward(
         self, x: Tensor, text: Tensor, sigma: Tensor, *, mask: Tensor
     ) -> Tuple[Tensor, Tensor]:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        x : Tensor
-            _description_
-        text : Tensor
-            _description_
-        sigma : Tensor
-            _description_
-        mask : Tensor
-            _description_
-
-        Returns
-        -------
-        Tuple[Tensor, Tensor]
-            _description_
-        """
         if self.text_pos.device != x.device:
             self.text_pos = self.text_pos.to(x.device)
             self.stroke_pos = self.stroke_pos.to(x.device)

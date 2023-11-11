@@ -8,7 +8,15 @@ from .utils import FeedForwardNetwork
 
 class BasicTransformerBlock(nn.Module):
     """
-    _summary_
+    The BasicTransformerBlock consists of two layers of cross-attention and one feedforward layer,
+    each followed by layer normalization. It is a fundamental component of a transformer architecture.
+
+    Args:
+        d_model (int): The dimension of model embeddings.
+        n_heads (int): The number of self-attention heads.
+        d_head (int): The dimension of each self-attention head.
+        dropout (float, optional): The dropout probability. Default is 0.0.
+        d_cond (int, optional): The dimension of the conditioning context. Default is None.
     """
 
     def __init__(
@@ -20,23 +28,6 @@ class BasicTransformerBlock(nn.Module):
         dropout: float = 0.0,
         d_cond: int = None,
     ) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        d_model : int
-            _description_
-        n_heads : int
-            _description_
-        d_head : int
-            _description_
-        dropout : float, optional
-            _description_, by default 0.0
-        d_cond : int, optional
-            _description_, by default None
-        """
-
         super().__init__()
 
         self.attention_0 = CrossAttention(
@@ -62,22 +53,6 @@ class BasicTransformerBlock(nn.Module):
         self.norm_2 = nn.LayerNorm(d_model)
 
     def forward(self, x: Tensor, context: Tensor = None) -> Tensor:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        x : Tensor
-            _description_
-        context : Tensor, optional
-            _description_, by default None
-
-        Returns
-        -------
-        Tensor
-            _description_
-        """
-
         x = self.attention_0(self.norm_0(x)) + x
         x = self.attention_1(self.norm_1(x), context=context) + x
         x = self.ff_net(self.norm_2(x)) + x
@@ -87,7 +62,18 @@ class BasicTransformerBlock(nn.Module):
 
 class SpatialTransformer(nn.Module):
     """
-    _summary_
+    The SpatialTransformer applies a series of basic transformer blocks to the input tensor,
+    followed by projection layers. It allows a neural network to learn how to perform spatial transformations
+    on the input image in order to enhance the geometric invariance of the model. For example,
+    it can crop a region of interest, scale and correct the orientation of an image.
+
+    Args:
+        channels (int): The number of input channels.
+        n_heads (int): The number of self-attention heads in each transformer block.
+        d_head (int): The dimension of each self-attention head.
+        n_layers (int, optional): The number of transformer blocks to apply. Default is 1.
+        dropout (float, optional): The dropout probability. Default is 0.0.
+        d_cond (int, optional): The dimension of the conditioning context. Default is None.
     """
 
     def __init__(
@@ -100,25 +86,6 @@ class SpatialTransformer(nn.Module):
         dropout: float = 0.0,
         d_cond: int = None,
     ) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        channels : int
-            _description_
-        n_heads : int
-            _description_
-        d_head : int
-            _description_
-        n_layers : int, optional
-            _description_, by default 1
-        dropout : float, optional
-            _description_, by default 0.0
-        d_cond : int, optional
-            _description_, by default None
-        """
-
         super().__init__()
 
         self.channels = channels
@@ -149,22 +116,6 @@ class SpatialTransformer(nn.Module):
             p.detach().zero_()
 
     def forward(self, x: Tensor, context: Tensor = None) -> Tensor:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        x : Tensor
-            _description_
-        context : Tensor, optional
-            _description_, by default None
-
-        Returns
-        -------
-        Tensor
-            _description_
-        """
-
         _, _, h, w = x.shape
         x_in = x
 

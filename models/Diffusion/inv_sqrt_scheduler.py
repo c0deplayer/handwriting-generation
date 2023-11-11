@@ -6,7 +6,36 @@ from torch.optim.optimizer import Optimizer
 
 class InverseSqrtScheduler(LRScheduler):
     """
-    _summary_
+    The InverseSqrtScheduler is a learning rate scheduler used in training models.
+    It gradually increases the learning rate for a specified number of warm-up steps
+    and then decreases it inversely proportional to the square root of
+    the step count. This helps stabilize training for Transformer models.
+
+    Args:
+        optimizer (Optimizer): The optimizer to adjust the learning rate for.
+        lr_mul (float, optional): The initial learning rate multiplier. (default: 1.0)
+        d_model (int, optional): The model's dimensionality. (default: 128)
+        n_warmup_steps (int, optional): The number of warm-up steps. (default: 4000)
+        last_epoch (int, optional): The index of the last epoch. (default: -1)
+        verbose (bool, optional): If True, print learning rate changes. (default: False)
+
+    Example:
+        ```
+        # Create a model and an optimizer
+        model = YourModel()
+        optimizer = Optimizer(model.parameters(), lr=0.001)
+
+        # Create an InverseSqrtScheduler with default settings
+        scheduler = InverseSqrtScheduler(optimizer)
+
+        # Training loop
+        for epoch in range(num_epochs):
+            # Train your model
+            ...
+
+            # Update the learning rate
+            scheduler.step(epoch)
+        ```
     """
 
     def __init__(
@@ -14,41 +43,17 @@ class InverseSqrtScheduler(LRScheduler):
         optimizer: Optimizer,
         lr_mul: float = 1.0,
         d_model: int = 128,
-        n_warmup_steps: int = 10000,
+        n_warmup_steps: int = 4000,
         last_epoch: int = -1,
         verbose: bool = False,
     ) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        optimizer : Optimizer
-            _description_
-        lr_mul : float, optional
-            _description_, by default 1.0
-        d_model : int, optional
-            _description_, by default 128
-        n_warmup_steps : int, optional
-            _description_, by default 10000
-        last_epoch : int, optional
-            _description_, by default ...
-        verbose : bool, optional
-            _description_, by default False
-
-        Raises
-        ------
-        TypeError
-            _description_
-        """
-
         if not isinstance(optimizer, Optimizer):
             raise TypeError(f"{type(optimizer).__name__} is not an Optimizer")
         if lr_mul <= 0.0:
             raise ValueError(f"Invalid learning rate multiplier: {lr_mul}")
         if d_model <= 0:
             raise ValueError(f"Invalid d_model: {d_model}")
-        if n_warmup_steps < 0:
+        if n_warmup_steps <= 0:
             raise ValueError(f"Invalid number of warmup steps: {n_warmup_steps}")
 
         self.d_model = d_model
@@ -61,52 +66,25 @@ class InverseSqrtScheduler(LRScheduler):
 
         super().__init__(optimizer, last_epoch, verbose)
 
-    # noinspection PyUnresolvedReferences,PyProtectedMember
     def step(self, epoch: int = None) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        epoch : int, optional
-            _description_, by default None
-
-        Returns
-        -------
-        float
-            _description_
-        """
         self._step_count += 1
         self.optimizer._step_count += 1
 
         self._last_lr = self.update_lr()
 
     def get_last_lr(self) -> float:
-        """
-        Return last computed learning rate by current scheduler.
-        """
-
         return self._last_lr
 
     def get_lr(self) -> float:
-        """
-        _summary_
-        """
-
         for g in self.optimizer.param_groups:
             return g["lr"]
 
     def get_lr_scale(self) -> float:
-        """
-        _summary_
-        """
-
         return (self.d_model ** (-0.5)) * min(
             self._step_count ** (-0.5),
             self._step_count * self.n_warmup_steps ** (-1.5),
         )
 
-    # noinspection PyMethodOverriding
     @staticmethod
     def print_lr(
         is_verbose: bool,
@@ -114,21 +92,6 @@ class InverseSqrtScheduler(LRScheduler):
         lr: float,
         epoch: int = None,
     ) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        is_verbose : bool
-            _description_
-        group : Dict[str, Any]
-            _description_
-        lr : float
-            _description_
-        epoch : int, optional
-            _description_, by default None
-        """
-
         if is_verbose:
             if epoch is None:
                 print(f"Learning rate: {group:.4e} --> {lr:.4e}")

@@ -6,9 +6,17 @@ from .utils import GroupNorm32
 
 class ResBlock(nn.Module):
     """
-    _summary_
+    A residual block typically consists of a sequence of layers, including convolutional layers and skip connections.
+    Residual blocks are used to enable residual learning, which helps the network learn identity mappings
+    and is especially effective in deep networks.
+
+    Args:
+        channels (int): The number of input channels.
+        d_t_emb (int): The dimension of time embeddings.
+        out_channels (int, optional): The number of output channels. If not provided, it defaults to `channels`.
+        dropout (float, optional): The dropout rate applied to the output.
     """
-    
+
     def __init__(
         self,
         channels: int,
@@ -17,21 +25,6 @@ class ResBlock(nn.Module):
         out_channels: int = None,
         dropout: float = 0.0,
     ) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        channels : int
-            _description_
-        d_t_emb : int
-            _description_
-        out_channels : int, optional
-            _description_, by default None
-        dropout : float, optional
-            _description_, by default 0.0
-        """
-        
         super().__init__()
 
         if out_channels is None:
@@ -59,22 +52,6 @@ class ResBlock(nn.Module):
         )
 
     def forward(self, x: Tensor, emb: Tensor) -> Tensor:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        x : Tensor
-            _description_
-        emb : Tensor
-            _description_
-
-        Returns
-        -------
-        Tensor
-            _description_
-        """
-        
         h = self.in_layers(x)
 
         emb = self.emb_layers(emb).type(h.dtype)
@@ -87,18 +64,15 @@ class ResBlock(nn.Module):
 
 
 class UpSample(nn.Module):
-    """Learned 2x up-sample without padding"""
+    """
+    The UpSample module is used to increase the spatial resolution of the input data by a factor of 2. It employs a
+    convolutional transpose operation to achieve the up-sampling.
+
+    Args:
+        channels (int): The number of input channels.
+    """
 
     def __init__(self, channels: int) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        channels : int
-            _description_
-        """
-        
         super().__init__()
 
         self.up_trans = nn.ConvTranspose2d(channels, channels, kernel_size=2, stride=2)
@@ -108,16 +82,15 @@ class UpSample(nn.Module):
 
 
 class DownSample(nn.Module):
-    def __init__(self, channels: int) -> None:
-        """
-        _summary_
+    """
+    The DownSample module employs a 2D convolution operation with a kernel size of 3x3 and a stride of 2 in order
+    to perform downsampling.
 
-        Parameters
-        ----------
-        channels : int
-            _description_
-        """
-        
+    Args:
+        channels (int): The number of input channels.
+    """
+
+    def __init__(self, channels: int) -> None:
         super().__init__()
 
         self.down = nn.Conv2d(channels, channels, kernel_size=3, stride=2, padding=1)

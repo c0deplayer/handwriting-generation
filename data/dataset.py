@@ -17,33 +17,61 @@ from .tokenizer import Tokenizer
 
 
 class DataModule(pl.LightningDataModule):
+    """
+    This DataModule class is designed to handle dataset management and data loading for PyTorch Lightning-based
+    deep learning applications. It provides train and validation data loaders, allowing you to separate the
+    training and validation data seamlessly.
+
+    Args:
+        dataset (Dataset): The dataset class to be used for loading data.
+        config (Union[ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion]): A configuration object specifying
+            dataset parameters and other relevant settings.
+
+    Raises:
+        TypeError: If the `config` object is not an instance of `ConfigDiffusion`,
+                   `ConfigRNN`, or `ConfigLatentDiffusion`.
+
+    Attributes:
+        train_dataset (DataLoader): The training dataset, initially set to None.
+        val_dataset (DataLoader): The validation dataset, initially set to None.
+        dataset (Dataset): The dataset class used for loading data.
+        __config (Union[ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion]):
+                The configuration object specifying dataset parameters and settings.
+        batch_size (int): The batch size used for data loading.
+        max_text_len (int): The maximum length of text data.
+        max_files (int): The maximum number of data files.
+        img_height (int): The height of image data.
+        img_width (int): The width of image data.
+        max_seq_len (int): The maximum sequence length (if applicable).
+        train_size (float): The proportion of data used for training.
+        val_size (float): The proportion of data used for validation.
+
+    Methods:
+        setup(stage: str) -> None:
+            Prepare the dataset for training and validation.
+
+        train_dataloader() -> DataLoader:
+            Return a DataLoader for the training dataset.
+
+        val_dataloader() -> DataLoader:
+            Return a DataLoader for the validation dataset.
+    """
+
     def __init__(
         self,
         dataset: Dataset,
         config: Union[ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion],
     ) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        dataset: _type_
-            _description_
-        config : ConfigDiffusion | ConfigRNN | ConfigLatentDiffusion
-            _description_
-        """
-
         super().__init__()
 
         if not isinstance(config, (ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion)):
             raise TypeError(
-                "Expected config to be ConfigDiffusion, ConfigRNN or ConfigLatentDiffusion, "
+                "Expected config to be ConfigDiffusion, ConfigRNN, or ConfigLatentDiffusion, "
                 f"got {type(config).__name__}"
             )
 
         self.train_dataset = None
         self.val_dataset = None
-        self.test_dataset = None
 
         self.dataset = dataset
         self.__config = config
@@ -97,6 +125,32 @@ class DataModule(pl.LightningDataModule):
 
 
 class DummyDataset(Dataset):
+    """
+    This `DummyDataset` class is intended to be used as a template for creating custom dataset classes in PyTorch.
+    It provides placeholder methods and serves as a starting point for implementing your own dataset.
+
+    Args:
+        None
+
+    Methods:
+        __init__(self) -> None:
+            Initialize a new instance of the `DummyDataset` class.
+
+        __load_dataset__(self) -> None:
+            Placeholder method for loading the dataset. Override this method to load your own data.
+
+        preprocess_data(self) -> List[Dict[str, Any]]:
+            Placeholder method for data preprocessing. Override this method to preprocess your dataset.
+
+        __getitem__(self, index: int) -> Tuple[Any, ...]:
+            Placeholder method for retrieving an item from the dataset.
+            Override this method to define how data is retrieved.
+
+        __len__(self) -> int:
+            Placeholder method for getting the length of the dataset.
+            Override this method to specify the dataset's length.
+    """
+
     def __init__(self) -> None:
         super().__init__()
 
@@ -114,6 +168,49 @@ class DummyDataset(Dataset):
 
 
 class IAMonDataset(Dataset):
+    """
+    This dataset class is designed for loading and preprocessing data from the IAM Online handwriting recognition dataset.
+    It is intended to be used with PyTorch data loaders for training, validation, and testing purposes.
+
+    Args:
+        img_height (int): The height of images in the dataset.
+        img_width (int): The width of images in the dataset.
+        max_text_len (int): The maximum allowable length of text data.
+        max_seq_len (int): The maximum sequence length (if applicable).
+        max_files (int): The maximum number of data files to load.
+        config (Union[ConfigDiffusion, ConfigRNN]): A configuration object specifying dataset parameters and settings.
+        dataset_type (Literal["train", "val", "test"]): The type of dataset to load ("train," "val," or "test").
+        strict (bool, optional): Whether to enforce strict vocabulary constraints (default: False).
+
+    Attributes:
+        img_height (int): The height of the images in the dataset.
+        img_width (int): The width of the images in the dataset.
+        max_seq_len (int): The maximum sequence length of the data.
+        max_text_len (int): The maximum length of the text data.
+        max_files (int): The maximum number of files to load.
+        style_extractor (StyleExtractor): Object for extracting style features.
+        tokenizer (Tokenizer): Tokenizer for text encoding.
+        dataset_type (Literal["train", "val", "test"]): Type of the dataset.
+        dataset_txt (List[str]): List of dataset filenames.
+
+    Methods:
+        __load_dataset__(self) -> None:
+            Load the dataset from an HDF5 file or preprocess it if necessary.
+
+        preprocess_data(self) -> List[Dict[str, Any]]:
+            Preprocess the dataset by loading and formatting data from the raw IAM Online dataset.
+
+        __getitem__(self, index: int) -> Tuple[Tensor, ...]:
+            Get a data item from the dataset.
+
+        __len__(self) -> int:
+            Get the length of the dataset.
+
+    Properties:
+        config (Union[ConfigDiffusion, ConfigRNN]): The configuration object.
+        dataset (List[Dict[str, Any]]): The loaded dataset.
+    """
+
     def __init__(
         self,
         img_height: int,
@@ -126,25 +223,6 @@ class IAMonDataset(Dataset):
         *,
         strict: bool = False,
     ) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        img_height : int
-            _description_
-        img_width : int
-            _description_
-        max_text_len : int
-            _description_
-        max_seq_len : int
-            _description_
-        max_files : int
-            _description_
-        config : Union[ConfigDiffusion, ConfigRNN]
-            _description_
-        """
-
         super().__init__()
 
         self.__config = config
@@ -177,9 +255,9 @@ class IAMonDataset(Dataset):
         self.__load_dataset__()
         print(f"Size of dataset: {len(self.dataset)}")
 
-        if not self.diffusion:
-            self._mean = utils.compute_mean(self.dataset)
-            self._std = utils.compute_std(self.dataset)
+        # if not self.diffusion:
+        #     self._mean = utils.compute_mean(self.dataset)
+        #     self._std = utils.compute_std(self.dataset)
 
     def __load_dataset__(self) -> None:
         h5_file_path = Path(f"./data/h5_dataset/{self.dataset_type}_iamondb.h5")
@@ -189,15 +267,6 @@ class IAMonDataset(Dataset):
             self.__dataset = self.preprocess_data()
 
     def preprocess_data(self) -> List[Dict[str, Any]]:
-        """
-        _summary_
-
-        Returns
-        -------
-        List[Dict[str, Any]]
-            _description_
-        """
-
         dataset = []
         raw_data_path = Path(self.config.data_path)
         ascii_path = raw_data_path / "ascii"
@@ -227,9 +296,7 @@ class IAMonDataset(Dataset):
                 path_file_xml = strokes_path / f"{idx[:3]}/{idx[:7]}/{file}.xml"
                 path_file_tif = img_path / f"{idx[:3]}/{idx[:7]}/{file}.tif"
 
-                strokes = utils.get_line_strokes(
-                    path_file_xml, self.max_seq_len, diffusion=self.diffusion
-                )
+                strokes = utils.get_line_strokes(path_file_xml, self.max_seq_len)
 
                 one_hot, text = utils.get_encoded_text_with_one_hot_encoding(
                     raw_text, self.tokenizer, self.max_text_len
@@ -275,19 +342,19 @@ class IAMonDataset(Dataset):
     def dataset(self) -> List[Dict[str, Any]]:
         return self.__dataset
 
-    @property
-    def mean(self) -> Tensor:
-        return self._mean
-
-    @property
-    def std(self) -> Tensor:
-        return self._std
-
-    def normalize(self, strokes: Tensor) -> Tensor:
-        return (strokes - self.mean) / self.std
-
-    def denormalize(self, strokes: Tensor) -> Tensor:
-        return strokes * self.std + self.mean
+    # @property
+    # def mean(self) -> Tensor:
+    #     return self._mean
+    #
+    # @property
+    # def std(self) -> Tensor:
+    #     return self._std
+    #
+    # def normalize(self, strokes: Tensor) -> Tensor:
+    #     return (strokes - self.mean) / self.std
+    #
+    # def denormalize(self, strokes: Tensor) -> Tensor:
+    #     return strokes * self.std + self.mean
 
     def __getitem__(self, index: int) -> Tuple[Tensor, ...]:
         if self.diffusion:
@@ -301,7 +368,7 @@ class IAMonDataset(Dataset):
             strokes = torch.tensor(self.dataset[index]["strokes"], dtype=torch.float32)
             text = torch.tensor(self.dataset[index]["one_hot"], dtype=torch.float32)
 
-            strokes[1:, :] = self.normalize(strokes[1:, :])
+            # strokes[1:, :] = self.normalize(strokes[1:, :])
 
             return strokes, text
 
@@ -310,6 +377,41 @@ class IAMonDataset(Dataset):
 
 
 class IAMDataset(Dataset):
+    """
+    This class is designed to handle the IAM Database handwriting dataset. It provides methods for loading
+    and preprocessing the data, and for retrieving data samples for training or validation.
+
+    Args:
+        config (ConfigLatentDiffusion): Configuration object specifying dataset parameters and settings.
+        img_height (int): The height of the images in the dataset.
+        img_width (int): The width of the images in the dataset.
+        max_text_len (int): The maximum length of the text data.
+        max_files (int): The maximum number of files to load.
+        dataset_type (Literal["train", "val", "test"]): Type of the dataset - train, validation, or test.
+        strict (bool, optional): Whether to apply strict constraints on data filtering. Defaults to False.
+
+    Attributes:
+        img_height (int): The height of the images in the dataset.
+        img_width (int): The width of the images in the dataset.
+        max_text_len (int): The maximum length of the text data.
+        max_files (int): The maximum number of files to load.
+        transforms (torchvision.transforms.Compose): Image transformations for data preprocessing.
+        dataset_type (Literal["train", "val", "test"]): Type of the dataset.
+        tokenizer (Tokenizer): Tokenizer for text encoding.
+        dataset_txt (List[str]): List of dataset filenames.
+
+    Properties:
+        config (ConfigLatentDiffusion): The configuration object.
+        dataset (List[Dict[str, Any]]): The loaded dataset.
+        map_writer_id (Dict[str, int]): A mapping of writer IDs to integer indices.
+
+    Methods:
+        __init__(...): Initializes an instance of the IAMDataset class.
+        __load_data__() -> None: Loads the dataset into memory.
+        preprocess_data() -> Tuple[List[Dict[str, Any]], Dict[str, int]]: Preprocesses the data.
+        __getitem__(index: int) -> Tuple[Tensor, Tensor, Tensor]: Retrieves a specific item from the dataset.
+    """
+
     def __init__(
         self,
         config: ConfigLatentDiffusion,
@@ -365,15 +467,6 @@ class IAMDataset(Dataset):
             self.__dataset, self.__map_writer_id = self.preprocess_data()
 
     def preprocess_data(self) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
-        """
-        _summary_
-
-        Returns
-        -------
-        Tuple[List[Dict[str, Any]], Dict[str, int]]
-            _description_
-        """
-
         dataset, map_writer_id = [], {}
         raw_data_path = Path(self.config.data_path)
 

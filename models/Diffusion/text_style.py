@@ -10,21 +10,19 @@ from .utils import reshape_up, FeedForwardNetwork
 
 class StyleExtractor(nn.Module):
     """
-    Takes a grayscale image (with the last channel) with pixels [0, 255].
-    Rescales to [-1, 1] and repeats along the channel axis for 3 channels.
-    Uses a MobileNetV2 with pretrained model_checkpoints from imagenet as initial model_checkpoints.
+    Extract Style Features from a Grayscale Image.
+
+    This module takes a grayscale image (with the last channel) with pixel values in
+    the range [0, 255]. It rescales the image to the range [-1, 1] and replicates it
+    along the channel axis to create a 3-channel image. The module then utilizes a
+    MobileNetV2 architecture with pretrained weights from ImageNet as the initial
+    feature extractor.
+
+    Args:
+        device (torch.device): The device to run the StyleExtractor on.
     """
 
     def __init__(self, *, device: torch.device) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        device : torch.device
-            _description_
-        """
-
         super().__init__()
 
         self.device = device
@@ -39,15 +37,6 @@ class StyleExtractor(nn.Module):
             p.requires_grad = False
 
     def forward(self, image: Tensor) -> Tensor:
-        """_summary_
-
-        Args:
-            image (Tensor): _description_
-
-        Returns:
-            Tensor: _description_
-        """
-
         x = image.clone().detach().to(self.device)
 
         x = x / 127.5 - 1
@@ -62,7 +51,13 @@ class StyleExtractor(nn.Module):
 
 class TextStyleEncoder(nn.Module):
     """
-    _summary_
+    The TextStyleEncoder module takes input text and style features and encodes them into a style-aware representation.
+
+    Args:
+        in_features (int): The input feature dimension.
+        d_model (int): The output dimension of the encoded style-aware representation.
+        vocab_size (int): The vocabulary size for text embedding. Defaults to 73.
+        hidden_size (int): The hidden size for the feedforward networks. Defaults to 512.
     """
 
     def __init__(
@@ -72,20 +67,6 @@ class TextStyleEncoder(nn.Module):
         vocab_size: int = 73,
         hidden_size: int = 512,
     ) -> None:
-        """_summary_
-
-        Parameters
-        ----------
-        in_features: int
-            _description_
-        d_model: int
-            _description_
-        vocab_size: int
-            _description_ by default 73
-        hidden_size: int
-            _description_, by default 512
-        """
-
         super().__init__()
 
         self.dropout = nn.Dropout(0.3)
@@ -104,24 +85,6 @@ class TextStyleEncoder(nn.Module):
         self.affine_3 = AffineTransformLayer(in_features // 8, d_model)
 
     def forward(self, text: Tensor, style: Tensor, sigma: Tensor) -> Tensor:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        text: Tensor
-            _description_
-        style: Tensor
-            _description_
-        sigma: Tensor
-            _description_
-
-        Returns
-        -------
-        Tensor
-            _description_
-        """
-
         style = reshape_up(self.dropout(style), factor=5)
 
         style = self.layer_norm(self.style_ffn(style))

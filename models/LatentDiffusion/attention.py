@@ -5,9 +5,22 @@ from torch import Tensor, nn
 
 class CrossAttention(nn.Module):
     """
-    _summary_
+    Cross-Attention module for neural networks, optionally supporting Flash Attention.
+
+    This module performs cross-attention between input `x` and a context `context`, producing an output tensor.
+
+    Args:
+        d_model (int): The input feature dimension.
+        d_cond (int, optional): The dimension of the conditioning context (default is `None`, which uses `d_model`).
+        n_heads (int): The number of attention heads.
+        d_head (int): The dimension of each attention head.
+        dropout (float): Dropout probability.
+        use_flash_attention (bool): Whether to use Flash Attention if available.
+
+    Raises:
+        ValueError: If the head size is too large for Flash Attention.
     """
-    
+
     def __init__(
         self,
         d_model: int,
@@ -18,25 +31,6 @@ class CrossAttention(nn.Module):
         *,
         use_flash_attention: bool = False,
     ) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        d_model : int
-            _description_
-        d_cond : int, optional
-            _description_, by default None
-        n_heads : int, optional
-            _description_, by default 8
-        d_head : int, optional
-            _description_, by default 64
-        dropout : float, optional
-            _description_, by default 0.0
-        use_flash_attention : bool, optional
-            _description_, by default False
-        """
-        
         super().__init__()
 
         self.use_flash_attention = use_flash_attention
@@ -66,24 +60,6 @@ class CrossAttention(nn.Module):
     def forward(
         self, x: Tensor, *, context: Tensor = None, mask: Tensor = None
     ) -> Tensor:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        x : Tensor
-            _description_
-        context : Tensor, optional
-            _description_, by default None
-        mask : Tensor, optional
-            _description_, by default None
-
-        Returns
-        -------
-        Tensor
-            _description_
-        """
-        
         has_context = context is not None
         if not has_context:
             context = x
@@ -104,29 +80,6 @@ class CrossAttention(nn.Module):
             return self.normal_attention(q, k, v, mask=mask)
 
     def flash_attention(self, q: Tensor, k: Tensor, v: Tensor) -> Tensor:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        q : Tensor
-            _description_
-        k : Tensor
-            _description_
-        v : Tensor
-            _description_
-
-        Returns
-        -------
-        Tensor
-            _description_
-
-        Raises
-        ------
-        ValueError
-            _description_
-        """
-        
         batch_size, seq_len, _ = q.size()
 
         qkv = torch.stack((q, k, v), dim=2)
@@ -155,31 +108,10 @@ class CrossAttention(nn.Module):
     def normal_attention(
         self, q: Tensor, k: Tensor, v: Tensor, *, mask: Tensor = None
     ) -> Tensor:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        q : Tensor
-            _description_
-        k : Tensor
-            _description_
-        v : Tensor
-            _description_
-        mask : Tensor, optional
-            _description_, by default None
-
-        Returns
-        -------
-        Tensor
-            _description_
-        """
-        
         q, k, v = [
             rearrange(t, "b n (h d) -> (b h) n d", h=self.n_heads) for t in (q, k, v)
         ]
 
-        # noinspection PyTypeChecker
         attention: Tensor = einsum(q, k, "b i d, b j d -> b i j") * self.scale
 
         if mask is not None:
@@ -188,7 +120,6 @@ class CrossAttention(nn.Module):
 
         attention = torch.softmax(attention, dim=-1)
 
-        # noinspection PyTypeChecker
         out = einsum(attention, v, "b i j, b j d -> b i d")
         out = rearrange(out, "(b h) n d -> b n (h d)", h=self.n_heads)
 
@@ -197,21 +128,18 @@ class CrossAttention(nn.Module):
 
 class WordAttention(nn.Module):
     """
-    _summary_
-    """
-    
-    def __init__(self, in_features: int, hidden_size: int) -> None:
-        """
-        _summary_
+    Word-level Attention module for neural networks.
 
-        Parameters
-        ----------
-        in_features : int
-            _description_
-        hidden_size : int
-            _description_
-        """
-        
+    This module performs word-level attention on the input tensor `x` to compute attention scores
+    and generate weighted sums of values. It is commonly used in natural language processing and
+    sequence modeling tasks.
+
+    Args:
+        in_features (int): The input feature dimension.
+        hidden_size (int): The dimension of the intermediate hidden space for queries, keys, and values.
+    """
+
+    def __init__(self, in_features: int, hidden_size: int) -> None:
         super().__init__()
 
         self.to_q = nn.Linear(in_features, hidden_size)
@@ -219,20 +147,6 @@ class WordAttention(nn.Module):
         self.to_v = nn.Linear(in_features, hidden_size)
 
     def forward(self, x: Tensor) -> Tensor:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        x : Tensor
-            _description_
-
-        Returns
-        -------
-        Tensor
-            _description_
-        """
-        
         q = self.to_q(x)
         k = self.to_k(x)
         v = self.to_v(x)

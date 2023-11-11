@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Tuple, Dict, Union, Any
+from typing import Tuple, Dict, Union, Any, Optional, List
 
 import lightning.pytorch as pl
 import torch
@@ -27,7 +27,23 @@ from ..ema import ExponentialMovingAverage
 
 class DiffusionModel(nn.Module):
     """
-    _summary_
+    This Diffusion Model is a neural network architecture used for generating
+    realistic handwriting sequences. It incorporates multiple components, such as
+    convolutional layers, attention blocks, and feedforward networks, to capture
+    the complexity of handwriting generation.
+
+    Args:
+        ab (Tuple[Tensor, Tensor], optional): A tuple of alpha (1 - beta) and beta tensors.
+        num_layers (int, optional): The number of AttentionBlock layers at the lowest resolution. (default: 2)
+        c1 (int, optional): Dimensionality of the first convolutional layer. (default: 128)
+        c2 (int, optional): Dimensionality of the second convolutional layer. (default: 192)
+        c3 (int, optional): Dimensionality of the third convolutional layer. (default: 256)
+        drop_rate (float, optional): Dropout rate. (default: 0.1)
+        vocab_size (int, optional): Vocabulary size for text embeddings. (default: 73)
+
+    Attributes:
+        alpha (Tensor): Alpha values for diffusion.
+        beta (Tensor): Beta values for diffusion.
     """
 
     def __init__(
@@ -40,25 +56,6 @@ class DiffusionModel(nn.Module):
         drop_rate: float = 0.1,
         vocab_size: int = 73,
     ) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        num_layers : int, optional
-            _description_, by default 2
-        c1 : int, optional
-            _description_, by default 128
-        c2 : int, optional
-            _description_, by default 192
-        c3 : int, optional
-            _description_, by default 256
-        drop_rate : float, optional
-            _description_, by default 0.1
-        vocab_size : int, optional
-            _description_, by default 73
-        """
-
         super().__init__()
 
         if ab is not None:
@@ -120,20 +117,6 @@ class DiffusionModel(nn.Module):
         self.pen_lifts_dense = nn.Sequential(nn.Linear(c1, 1), nn.Sigmoid())
 
     def forward(self, batch: Tuple[Tensor, ...]) -> Tuple[Tensor, Tensor, Tensor]:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        batch : Tuple[Tensor, ...]
-            _description_
-
-        Returns
-        -------
-        Tuple[Tensor, Tensor, Tensor]
-            _description_
-        """
-
         x, text, sigma, style = batch
         if self.beta.device != x.device:
             self.beta = self.beta.to(device=x.device)
@@ -192,11 +175,32 @@ class DiffusionModel(nn.Module):
         output = self.output_dense(x)
         pen_lifts = self.pen_lifts_dense(x)
 
-        # noinspection PyUnboundLocalVariable
         return output, pen_lifts, attention
 
 
 class DiffusionWrapper(pl.LightningModule):
+    """
+    This class serves as a PyTorch Lightning Module and EMA wrapper for training and using
+    the Diffusion Model for generating handwriting sequences.
+
+    Args:
+        diffusion_params (Dict[str, Any]): Dictionary of parameters for initializing the
+            DiffusionModel.
+        use_ema (bool, optional): Use Exponential Moving Average during training.
+            (default: True)
+
+    Attributes:
+        beta (Tensor): Beta values for diffusion.
+        alpha (Tensor): Alpha values for diffusion.
+        use_ema (bool): Flag to indicate if Exponential Moving Average is used.
+        diffusion_model (DiffusionModel): The core Diffusion Model.
+        ema (Optional[ExponentialMovingAverage]): Exponential Moving Average module.
+
+    Note:
+        For proper initialization of `diffusion_params`, ensure it contains the necessary
+        parameters for configuring the DiffusionModel.
+    """
+
     def __init__(
         self, diffusion_params: Dict[str, Any], *, use_ema: bool = True
     ) -> None:
@@ -339,20 +343,6 @@ class DiffusionWrapper(pl.LightningModule):
 
     @staticmethod
     def loss(loss_batch: Tuple[Tensor, ...]) -> Tuple[Tensor, Tensor, Tensor]:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        loss_batch : tuple[Tensor, ...]
-            _description_
-
-        Returns
-        -------
-        Tensor
-            _description_
-        """
-
         strokes, strokes_pred, pen_lifts, pen_lifts_pred, alphas = loss_batch
 
         pen_lifts_pred = rearrange(pen_lifts_pred, "b h 1 -> b h")
@@ -375,32 +365,27 @@ class DiffusionWrapper(pl.LightningModule):
         max_text_len: int,
         *,
         color: str,
-        save_path: Union[str, None],
+        save_path: Optional[str],
         style_path: Union[str, Tensor],
         is_fid: bool = False,
-    ) -> plt.Figure:
+    ) -> Union[plt.Figure, List[plt.Figure]]:
         """
-        _summary_
+        Generate handwriting sequence images using the trained Diffusion Model.
 
-        Parameters
-        ----------
-        sequence : str
-            _description_
-        vocab : str
-            _description_
-        color : str
-            _description_
-        is_fid : bool, optional
-            _description_, by default False
-        save_path : str
-            _description_
-        style_path : Path | None, optional
-            _description_, by default None
+        Args:
+            sequence (Union[str, Tensor]): Either the input text sequence or the encoded
+                text tensor.
+            vocab (str): Vocabulary used for text generation.
+            max_text_len (int): Maximum text length for generation.
+            color (str): Color of the generated strokes.
+            save_path (Union[str, None]): Path to save the generated image (or None for no
+                saving).
+            style_path (Union[str, Tensor]): Path to the style image or the style vector.
+            is_fid (bool, optional): Use FID (Fréchet Inception Distance) generation mode.
+                (default: False)
 
-        Returns
-        -------
-        plt.Figure
-            _description_
+        Returns:
+            Union[plt.Figure, List[plt.Figure]]: The generated handwriting sequence as a Matplotlib figure.
         """
 
         if not is_fid:

@@ -7,22 +7,19 @@ from torch import nn as nn, Tensor
 
 class PositionalEncoder(nn.Module):
     """
-    _summary_
+    The PositionalEncoder generates positional encodings for use in self-attention mechanisms.
+    It provides a way to incorporate position information into the model without the need for recurrence.
+
+    Args:
+        position (int): The maximum position to encode.
+        d_model (int): The dimension of the model.
+        pos_factor (int, optional): A factor to scale the positional encodings. (default: 1)
+
+    Attributes:
+        positional_encodings (Tensor): The computed positional encodings.
     """
 
     def __init__(self, position: int, d_model: int, *, pos_factor: int = 1) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        position : int
-            _description_
-        d_model : int
-            _description_
-        pos_factor : int, optional
-            _description_, by default 1
-        """
         super().__init__()
 
         self.d_model = d_model
@@ -35,32 +32,18 @@ class PositionalEncoder(nn.Module):
         )
 
     def forward(self) -> Tensor:
-        """
-        _summary_
-
-        Returns
-        -------
-        Tensor
-            _description_
-        """
-
         return self.positional_encodings.detach().requires_grad_(False)
 
     def get_positional_encoding(self, position: int, d_model: int) -> Tensor:
         """
-        _summary_
+        Generate positional encodings.
 
-        Parameters
-        ----------
-        position : int
-            _description_
-        d_model : int
-            _description_
+        Args:
+            position (int): The maximum position to encode.
+            d_model (int): The dimension of the model.
 
-        Returns
-        -------
-        Tensor
-            _description_
+        Returns:
+            Tensor: The positional encodings tensor.
         """
 
         position = rearrange(torch.arange(position), "p -> p 1")

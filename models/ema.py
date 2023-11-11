@@ -1,5 +1,5 @@
 import copy
-from typing import Tuple
+from typing import Tuple, Optional
 
 import torch
 import torch.nn as nn
@@ -8,16 +8,59 @@ from torch import Tensor
 
 class ExponentialMovingAverage(nn.Module):
     """
-    Exponential Moving Average (EMA) is used to stabilize the training process of diffusion models
-    by computing a moving average of the parameters, which can help to reduce
-    the noise in the gradients and improve the performance of the model.
+    Exponential Moving Average (EMA) implementation for model parameter averaging.
+
+    This class provides a mechanism for maintaining an EMA of a PyTorch model's parameters
+    to improve the stability and convergence of training. It updates the EMA model with a
+    moving average of the original model's parameters over time.
+
+    Notes:
+        If gamma=1 and power=1, implements a simple average. gamma=1, power=2/3 are
+        good values for models you plan to train for a million or more steps (reaches decay
+        factor 0.999 at 31.6K steps, 0.9999 at 1M steps), gamma=1, power=3/4 for models
+        you plan to train for less (reaches decay factor 0.999 at 10K steps, 0.9999 at
+        215.4k steps).
+
+    Args:
+        model (nn.Module): The original model whose parameters are to be averaged.
+        ema_model (Optional[nn.Module]): The Exponential Moving Average (EMA) model to be updated. If not provided,
+                             a copy of the original model is used.
+        beta (float): The decay factor for EMA, usually close to 1.0. A higher value makes the EMA update slower.
+        update_after_step (int): The step after which to start updating the EMA model.
+        update_every (int): The frequency of EMA updates.
+        inv_gamma (float): The inverse gamma value for EMA decay calculation.
+        power (float): The power value for EMA decay calculation.
+        min_value (float): The minimum value for the EMA decay.
+
+    Attributes:
+        initiated (torch.Tensor): A tensor indicating if EMA initiation has occurred.
+        step (torch.Tensor): A tensor that keeps track of the number of steps.
+
+    Example:
+        ```
+        original_model = ...  # Your original PyTorch model
+        ema = ExponentialMovingAverage(original_model)
+
+        for epoch in range(num_epochs):
+            for batch in dataloader:
+                loss = compute_loss(batch)
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+
+                ema.update()  # Update the EMA model at the specified frequency
+
+            # Use the EMA model for evaluation or inference
+            ema_model = ema.model
+            evaluate(ema_model, dataloader)
+        ```
     """
 
     def __init__(
         self,
         model: nn.Module,
         *,
-        ema_model: nn.Module = None,
+        ema_model: Optional[nn.Module] = None,
         beta: float = 0.9999,
         update_after_step: int = 1000,
         update_every: int = 10,
@@ -25,29 +68,6 @@ class ExponentialMovingAverage(nn.Module):
         power: float = 2 / 3,
         min_value: float = 0.0,
     ):
-        """
-        _summary_
-
-        Parameters
-        ----------
-        model : nn.Module
-            _description_
-        ema_model : nn.Module, optional
-            _description_, by default None
-        beta : float, optional
-            _description_, by default 0.9999
-        update_after_step : int, optional
-            _description_, by default 1000
-        update_every : int, optional
-            _description_, by default 10
-        inv_gamma : float, optional
-            _description_, by default 1.0
-        power : float, optional
-            _description_, by default 2 / 3
-        min_value : float, optional
-            _description_, by default 0.0
-        """
-
         super().__init__()
 
         self.beta = beta
@@ -78,13 +98,8 @@ class ExponentialMovingAverage(nn.Module):
     def model(self) -> nn.Module:
         return self.ema_model
 
-    # noinspection PyUnresolvedReferences
     @torch.no_grad()
     def update_moving_average(self) -> None:
-        """
-        _summary_
-        """
-
         current_decay = self.get_current_decay()
 
         for (_, ma_params), (_, current_params) in zip(
@@ -96,10 +111,6 @@ class ExponentialMovingAverage(nn.Module):
                 ma_params.data.lerp_(current_params.data, 1.0 - current_decay)
 
     def update(self) -> None:
-        """
-        _summary_
-        """
-
         step = self.step.item()
         self.step += 1
 
@@ -123,10 +134,6 @@ class ExponentialMovingAverage(nn.Module):
         return 0.0 if step <= 0 else min(max(value, self.min_value), self.beta)
 
     def copy_params_from_model_to_ema(self) -> None:
-        """
-        _summary_
-        """
-
         for (_, ma_params), (_, current_params) in zip(
             self.get_params_iter(self.ema_model), self.get_params_iter(self.__model)
         ):
@@ -140,13 +147,4 @@ class ExponentialMovingAverage(nn.Module):
             yield name, param
 
     def __call__(self, *args, **kwargs) -> Tensor:
-        """
-        _summary_
-
-        Returns
-        -------
-        Tensor
-            _description_
-        """
-
         return self.ema_model(*args, **kwargs)

@@ -8,7 +8,25 @@ from .attention import AffineTransformLayer
 
 class ConvBlock(nn.Module):
     """
-    _summary_
+    The ConvBlock consists of multiple convolutional layers with affine transformations and dropout. The block
+    processes the input data and provides feature extraction capabilities.
+
+    Args:
+        in_features (int): Number of input features.
+        in_channels (int): Number of input channels.
+        out_channels (int): Number of output channels.
+        dilatation (int, optional): Dilation factor for convolution. (default: 1)
+        drop_rate (float, optional): Dropout rate to apply between layers. (default: 0.0)
+
+    Attributes:
+        conv_skip (nn.Conv1d): Skip connection convolutional layer.
+        conv_0 (nn.Conv1d): First convolutional layer.
+        affine_0 (AffineTransformLayer): Affine transformation layer 0.
+        conv_1 (nn.Conv1d): Second convolutional layer.
+        affine_1 (AffineTransformLayer): Affine transformation layer 1.
+        fc (nn.Linear): Linear fully connected layer.
+        affine_2 (AffineTransformLayer): Affine transformation layer 2.
+        dropout (nn.Dropout): Dropout layer.
     """
 
     def __init__(
@@ -20,23 +38,6 @@ class ConvBlock(nn.Module):
         *,
         drop_rate: float = 0.0,
     ) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        in_features : int
-            _description_
-        in_channels : int
-            _description_
-        out_channels : int
-            _description_
-        dilatation : int, optional
-            _description_, by default 1
-        drop_rate : float, optional
-            _description_, by default 0.0
-        """
-
         super().__init__()
 
         self.conv_skip = nn.Conv1d(
@@ -68,22 +69,6 @@ class ConvBlock(nn.Module):
         self.dropout = nn.Dropout(drop_rate)
 
     def forward(self, x: Tensor, alpha: Tensor) -> Tensor:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        x : Tensor
-            _description_
-        alpha : Tensor
-            _description_
-
-        Returns
-        -------
-        Tensor
-            _description_
-        """
-
         x_skip = self.conv_skip(x)
         x = self.conv_0(F.silu(x))
         x = self.dropout(self.affine_0(x, alpha))

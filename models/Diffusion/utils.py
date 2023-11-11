@@ -1,6 +1,6 @@
 import math
 import os
-from typing import Union, List
+from typing import Union, List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,37 +13,28 @@ from data.utils import uniquify
 
 def reshape_up(x: Tensor, *, factor: int = 2) -> Tensor:
     """
-    _summary_
+    Reshape a 2D tensor by repeating elements along specific dimensions.
 
-    Parameters
-    ----------
-    x : Tensor
-        _description_
-    factor : int, optional
-        _description_, by default 2
+    Args:
+        x (Tensor): Input tensor.
+        factor (int, optional): The factor by which to reshape the tensor. Defaults to 2.
 
-    Returns
-    -------
-    Tensor
-        _description_
+    Returns:
+        Tensor: Reshaped tensor.
     """
 
     return rearrange(x, "b h (f w) -> b (h f) w", f=factor)
 
 
-def get_beta_set(*, device: torch.device) -> Tensor:
+def get_beta_set(device: torch.device) -> Tensor:
     """
-    _summary_
+    Generate a set of beta values for diffusion models.
 
-    Parameters
-    ----------
-    device : torch.device
-        _description_
+    Args:
+        device (torch.device): The device (e.g., 'cpu' or 'cuda') on which to create the tensor.
 
-    Returns
-    -------
-    Tensor
-        _description_
+    Returns:
+        Tensor: A tensor containing a set of beta values.
     """
 
     start = 1e-5
@@ -57,19 +48,15 @@ def get_beta_set(*, device: torch.device) -> Tensor:
 
 def get_alphas(batch_size: int, alpha_set: Tensor, *, device: torch.device) -> Tensor:
     """
-    _summary_
+    Sample alpha values from the given set of alphas for diffusion models.
 
-    Parameters
-    ----------
-    batch_size : int
-        _description_
-    alpha_set : Tensor
-        _description_
+    Args:
+        batch_size (int): The number of alpha samples to generate.
+        alpha_set (Tensor): The set of alpha values to sample from.
+        device (torch.device): The device (e.g., 'cpu' or 'cuda') on which to create the tensor.
 
-    Returns
-    -------
-    Tensor
-        _description_
+    Returns:
+        Tensor: A tensor containing sampled alpha values.
     """
 
     if alpha_set.device != device:
@@ -95,19 +82,14 @@ def get_alphas(batch_size: int, alpha_set: Tensor, *, device: torch.device) -> T
 
 def create_padding_mask(text: Tensor, repeats: int = 1) -> Tensor:
     """
-    _summary_
+    Create a padding mask for text data with specified repeats.
 
-    Parameters
-    ----------
-    text : Tensor
-        _description_
-    repeats : int, optional
-        _description_, by default 1
+    Args:
+        text (Tensor): Text data tensor where padding values are marked as 0.
+        repeats (int, optional): The number of repeats for the mask. Defaults to 1.
 
-    Returns
-    -------
-    Tensor
-        _description_
+    Returns:
+        Tensor: A padding mask tensor with the specified number of repeats.
     """
 
     text = torch.eq(text, 0).float()
@@ -119,25 +101,17 @@ def diffusion_step(
     strokes: Tensor, eps: Tensor, beta: Tensor, alpha: Tensor, alpha_next: Tensor
 ) -> Tensor:
     """
-    _summary_
+    Perform a new diffusion step in a diffusion model.
 
-    Parameters
-    ----------
-    strokes : Tensor
-        _description_
-    eps : Tensor
-        _description_
-    beta : Tensor
-        _description_
-    alpha : Tensor
-        _description_
-    alpha_next : Tensor
-        _description_
+    Args:
+        strokes (Tensor): Input tensor representing strokes.
+        eps (Tensor): Noise tensor for diffusion.
+        beta (Tensor): Beta values for diffusion.
+        alpha (Tensor): Alpha values for diffusion.
+        alpha_next (Tensor): Alpha values for the next diffusion step.
 
-    Returns
-    -------
-    Tensor
-        _description_
+    Returns:
+        Tensor: Updated tensor after the diffusion step.
     """
 
     strokes_minus = (strokes - torch.sqrt(1 - alpha) * eps) / torch.sqrt(1 - beta)
@@ -152,27 +126,22 @@ def generate_stroke_image(
     strokes: np.ndarray,
     *,
     color: str,
-    save_path: Union[str, None],
+    save_path: Optional[str],
     scale: float = 1.0,
 ) -> Union[plt.Figure, List[plt.Figure]]:
     """
-    _summary_
+    Generate images from stroke data and optionally save them.
 
-    Parameters
-    ----------
-    strokes : np.ndarray
-        _description_
-    color : str
-        _description_
-    save_path : str
-        _description_
-    scale : float, optional
-        _description_, by default 1.0
+    Args:
+        strokes (np.ndarray): Array of stroke data. Each entry is an array with shape (n, 3),
+                              where n is the number of points and each row contains (x, y, pen_lift) information.
+        color (str): Color of the strokes in the generated images.
+        save_path (Optional[str]): If provided, the path where the image will be saved. If None, images are not saved.
+        scale (float, optional): Scaling factor for the generated image. Defaults to 1.0.
 
-    Returns
-    -------
-    plt.Figure
-        _description_
+    Returns:
+        Union[plt.Figure, List[plt.Figure]]: If a single image is generated, it returns a single matplotlib figure.
+            If multiple images are generated, it returns a list of figures.
     """
 
     fake_samples = []
@@ -209,7 +178,16 @@ def generate_stroke_image(
 
 class FeedForwardNetwork(nn.Module):
     """
-    _summary_
+    Feed-Forward Neural Network (FFN).
+
+    A simple feed-forward neural network with an optional activation function.
+
+    Args:
+        in_features (int): The input feature dimension.
+        out_features (int): The output feature dimension.
+        hidden_size (int, optional): The hidden size of the network. Defaults to 768.
+        act_before (bool, optional): If True, apply the activation function before hidden layers.
+            Defaults to True.
     """
 
     def __init__(
@@ -220,21 +198,6 @@ class FeedForwardNetwork(nn.Module):
         hidden_size: int = 768,
         act_before: bool = True,
     ) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        in_features : int
-            _description_
-        out_features : int
-            _description_
-        hidden_size : int, optional
-            _description_, by default 768
-        act_before : bool, optional
-            _description_, by default True
-        """
-
         super().__init__()
         self.act_before = act_before
 
@@ -250,18 +213,4 @@ class FeedForwardNetwork(nn.Module):
         self.ff_net = nn.Sequential(*ff_network)
 
     def forward(self, x: Tensor) -> Tensor:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        x : Tensor
-            _description_
-
-        Returns
-        -------
-        Tensor
-            _description_
-        """
-
         return self.ff_net(x)

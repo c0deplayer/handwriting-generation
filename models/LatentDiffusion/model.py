@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Dict, Tuple, Union
+from typing import Any, Dict, Tuple, Union, Optional
 
 import lightning.pytorch as pl
 import torch
@@ -20,22 +20,19 @@ from .unet import UNetModel
 
 
 class DiffusionWrapper(nn.Module):
-    """
-    _summary_
+    """Wrapper for a diffusion model.
+
+    Args:
+        kwargs_unet (Dict[str, Any]): Keyword arguments for UNetModel constructor.
+        img_size (Tuple[int, int]): Size of the input image (height, width).
+
+    Attributes:
+        diffusion_model (UNetModel): The UNet model for diffusion.
+        img_size (Tuple[int, int]): Size of the input image (height, width).
+
     """
 
     def __init__(self, kwargs_unet: Dict[str, Any], img_size: Tuple[int, int]) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        kwargs_unet : Dict[str, Any]
-            _description_
-        img_size : Tuple[int, int]
-            _description_
-        """
-
         super().__init__()
 
         self.diffusion_model = UNetModel(**kwargs_unet)
@@ -51,30 +48,6 @@ class DiffusionWrapper(nn.Module):
         interpolation: bool = False,
         mix_rate: float = None,
     ) -> Tensor:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        x : Tensor
-            _description_
-        time_step : Tensor
-            _description_
-        context : Tensor, optional
-            _description_, by default None
-        writer_id : Union[Tensor, Tuple[int, int]], optional
-            _description_, by default None
-        interpolation : bool, optional
-            _description_, by default False
-        mix_rate : float, optional
-            _description_, by default None
-
-        Returns
-        -------
-        Tensor
-            _description_
-        """
-
         return self.diffusion_model(
             x,
             time_step,
@@ -97,31 +70,21 @@ class DiffusionWrapper(nn.Module):
         cfg_scale: int = 0,
     ) -> Tensor:
         """
-        _summary_
+        Generate an image with diffusion noise.
 
-        Parameters
-        ----------
-        beta_alpha : Tuple[Tensor, Tensor, Tensor]
-            _description_
-        batch_size : int
-            _description_
-        writer_id : Union[Tensor, Tuple[int, int]]
-            _description_
-        word : Tensor
-            _description_
-        n_steps : int
-            _description_
-        mix_rate : float, optional
-            _description_, by default None
-        interpolation : bool, optional
-            _description_, by default False
-        cfg_scale : int, optional
-            _description_, by default 0
+        Args:
+            beta_alpha (Tuple[Tensor, Tensor, Tensor]): Tuple of beta, alpha, and alpha_bar tensors.
+            batch_size (int): Batch size.
+            writer_id (Tensor): Writer ID tensor.
+            word (Tensor): Input word tensor.
+            n_steps (int): Number of diffusion steps.
+            mix_rate (float, optional): Mixing rate. Default is None.
+            interpolation (bool, optional): Enable interpolation. Default is False.
+            cfg_scale (int, optional): Configuration scale. Default is 0.
 
-        Returns
-        -------
-        Tensor
-            _description_
+        Returns:
+            Tensor: Generated image with diffusion noise.
+
         """
 
         beta, alpha, alpha_bar = beta_alpha
@@ -176,7 +139,25 @@ class DiffusionWrapper(nn.Module):
 
 class LatentDiffusionModel(pl.LightningModule):
     """
-    _summary_
+    PyTorch Lightning module for a Latent Diffusion Model.
+
+    Args:
+        unet_params (Dict[str, Any]): Keyword arguments for UNetModel constructor.
+        autoencoder_path (str): Path to the pre-trained autoencoder model.
+        n_steps (int, optional): Number of diffusion steps. Default is 1000.
+        beta_start (float, optional): Starting value for beta. Default is 1e-4.
+        beta_end (float, optional): Ending value for beta. Default is 2e-2.
+        img_size (Tuple[int, int], optional): Size of the input image (height, width). Default is (64, 256).
+
+    Attributes:
+        model (DiffusionWrapper): The diffusion model.
+        ema (ExponentialMovingAverage): Exponential moving average of the model.
+        autoencoder (AutoencoderKL): Pre-trained autoencoder model.
+        n_steps (int): Number of diffusion steps.
+        img_size (Tuple[int, int]): Size of the input image (height, width).
+        beta (nn.Parameter): The beta parameter for diffusion.
+        alpha (Tensor): The alpha parameter for diffusion.
+        alpha_bar (nn.Parameter): The cumulative alpha parameter for diffusion.
     """
 
     def __init__(
@@ -188,25 +169,6 @@ class LatentDiffusionModel(pl.LightningModule):
         beta_end: float = 2e-2,
         img_size: Tuple[int, int] = (64, 256),
     ) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        unet_params : Dict[str, Any]
-            _description_
-        autoencoder_path : str
-            _description_
-        n_steps : int, optional
-            _description_, by default 1000
-        beta_start : float, optional
-            _description_, by default 1e-4
-        beta_end : float, optional
-            _description_, by default 2e-2
-        img_size : Tuple[int, int], optional
-            _description_, by default (64, 256)
-        """
-
         super().__init__()
 
         self.model = DiffusionWrapper(unet_params, img_size)
@@ -249,22 +211,6 @@ class LatentDiffusionModel(pl.LightningModule):
         *,
         interpolation: bool = False,
     ) -> Tuple[Tensor, Tensor]:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        batch : Tuple[Tensor, ...]
-            _description_
-        interpolation : bool, optional
-            _description_, by default False
-
-        Returns
-        -------
-        Tuple[Tensor, Tensor]
-            _description_
-        """
-
         writers, images, text = batch
 
         images = self.autoencoder.encode(images.to(torch.float32)).latent_dist.sample()
@@ -336,37 +282,27 @@ class LatentDiffusionModel(pl.LightningModule):
         writer_id: Union[int, Tuple[int, ...], Tensor],
         *,
         color: str,
-        save_path: Union[Path, None],
+        save_path: Optional[Path],
         is_fid: bool = False,
         interpolation: bool = False,
-        mix_rate: float = None,
+        mix_rate: Optional[float] = None,
     ) -> Image:
         """
-        _summary_
+        Generate an image from the model.
 
-        Parameters
-        ----------
-        text_line : Union[str, Tensor]
-            _description_
-        vocab : str
-            _description_
-        writer_id : Union[int, Tuple[int, int]]
-            _description_
-        color : str,
-            _description_
-        save_path : Path
-            _description_
-        is_fid : bool
-            _description_, by default False
-        interpolation : bool, optional
-            _description_, by default False
-        mix_rate : float, optional
-            _description_, by default None
+        Args:
+            text_line (Union[str, Tensor]): Input text line or tensor.
+            vocab (str): Vocabulary for text encoding.
+            max_text_len (int): Maximum text length.
+            writer_id (Union[int, Tuple[int, ...], Tensor]): Writer ID(s).
+            color (str): Color for the generated image.
+            save_path (Optional[Path]): Path to save the generated image.
+            is_fid (bool, optional): Enable FID generation. Default is False.
+            interpolation (bool, optional): Enable interpolation. Default is False.
+            mix_rate (Optional[float]): Mixing rate. Default is None.
 
-        Raises
-        ------
-        TypeError
-            _description_
+        Returns:
+            Image: The generated image.
         """
 
         if not is_fid:

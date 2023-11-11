@@ -18,7 +18,16 @@ T2PIL = torchvision.transforms.ToPILImage()
 
 class GroupNorm32(nn.GroupNorm):
     """
-    _summary_
+    Group normalization with support for 32-bit data type.
+
+    Args:
+        num_groups (int): Number of groups for normalization.
+        num_channels (int): Number of channels in the input.
+        eps (float, optional): A small value added to the denominator for numerical stability. Default is 1e-5.
+
+    Attributes:
+        num_groups (int): Number of groups for normalization.
+        num_channels (int): Number of channels in the input.
     """
 
     def forward(self, x: Tensor) -> Tensor:
@@ -27,7 +36,19 @@ class GroupNorm32(nn.GroupNorm):
 
 class FeedForwardNetwork(nn.Module):
     """
-    _summary_
+    Feedforward neural network with optional dropout.
+
+    Args:
+        d_model (int): Input feature dimension.
+        d_out (int, optional): Output feature dimension. If not provided, it is set to d_model. Default is None.
+        d_mult (int, optional): Multiplier for the hidden layer dimension. Default is 4.
+        dropout (float, optional): Dropout probability. Default is 0.0.
+
+    Attributes:
+        d_model (int): Input feature dimension.
+        d_out (int): Output feature dimension.
+        d_mult (int): Multiplier for the hidden layer dimension.
+        dropout (float): Dropout probability.
     """
 
     def __init__(
@@ -38,21 +59,6 @@ class FeedForwardNetwork(nn.Module):
         d_mult: int = 4,
         dropout: float = 0.0,
     ) -> None:
-        """
-        _summary_
-
-        Parameters
-        ----------
-        d_model : int
-            _description_
-        d_out : int, optional
-            _description_, by default None
-        d_mult : int, optional
-            _description_, by default 4
-        dropout : float, optional
-            _description_, by default 0.0
-        """
-
         super().__init__()
 
         if d_out is None:
@@ -72,21 +78,17 @@ def noise_image(
     x: Tensor, time_step: Tensor, alpha_bar: Tensor
 ) -> Tuple[Tensor, Tensor]:
     """
-    _summary_
+    Add noise to an input image tensor based on time steps and alpha_bar values.
 
-    Parameters
-    ----------
-    x : Tensor
-        _description_
-    time_step : Tensor
-        _description_
-    alpha_bar : Tensor
-        _description_
+    Args:
+        x (Tensor): Input image tensor of shape (batch_size, channels, height, width).
+        time_step (Tensor): Time step tensor of shape (batch_size, 1).
+        alpha_bar (Tensor): Alpha_bar values tensor of shape (batch_size, 1).
 
-    Returns
-    -------
-    Tuple[Tensor, Tensor]
-        _description_
+    Returns:
+        Tuple[Tensor, Tensor]: A tuple containing two tensors:
+        - noisy_image (Tensor): Image tensor with added noise, of the same shape as input x.
+        - noise (Tensor): Noise tensor used for adding to the input image, of the same shape as input x.)
     """
 
     sqrt_alpha_bar = rearrange(torch.sqrt(alpha_bar[time_step]), "v -> v 1 1 1")
@@ -101,17 +103,13 @@ def noise_image(
 
 def __crop_whitespaces(image: Image) -> Image:
     """
-    _summary_
+    Crop white spaces from the edges of an input image.
 
-    Parameters
-    ----------
-    image : Image
-        _description_
+    Args:
+        image (Image): An input image to be cropped.
 
-    Returns
-    -------
-    Image
-        _description_
+    Returns:
+        Image: A cropped image with white spaces removed.
     """
 
     img_gray = image.convert("L")
@@ -123,27 +121,24 @@ def __crop_whitespaces(image: Image) -> Image:
 
 def generate_image(
     image: Tensor,
-    path: Union[Path, None],
+    path: Optional[Path],
     *,
     color: str,
     labels: Optional[List[str]] = None,
     is_fid: bool = False,
 ) -> Union[Image, List[Image]]:
     """
-    _summary_
+    Generate and process images from an input tensor.
 
-    Parameters
-    ----------
-    image : Tensor
-        _description_
-    path : Path
-        _description_
-    color : str
-        _description_
-    labels : Optional[List[str]]
-        _description_ by default None
-    is_fid : bool
-        _description_, by default False
+    Args:
+        image (Tensor): The input tensor representing the image(s).
+        path (Optional[Path]): The path to save the image(s). If None, images won't be saved.
+        color (str): The desired color for the image(s).
+        labels (Optional[List[str]]): List of labels for each image. If provided, labels will be added to images.
+        is_fid (bool): If True, return a list of PIL images without processing. Ignored if labels are provided.
+
+    Returns:
+        Union[Image, List[Image]]: A processed image or a list of processed images.
     """
 
     if path is not None and os.path.isfile(path):
@@ -184,6 +179,17 @@ def generate_image(
 
 
 def __save_image(image: Image, path: Path) -> None:
+    """
+    Save a PIL image to the specified path, supporting SVG format.
+
+    Args:
+        image (Image): The PIL image to be saved.
+        path (Path): The path where the image will be saved.
+
+    Returns:
+        None
+    """
+
     if path.suffix == ".svg":
         path_bitmap = potrace.Bitmap(image, blacklevel=0.7).trace()
         __backend_svg(image, path, path_bitmap)
@@ -192,6 +198,18 @@ def __save_image(image: Image, path: Path) -> None:
 
 
 def __backend_svg(image: Image, path: Path, path_bitmap: Path) -> None:
+    """
+    Generate SVG content from a potrace bitmap and save it to a file.
+
+    Args:
+        image (Image): The PIL image.
+        path (Path): The path where the SVG file will be saved.
+        path_bitmap (Path): The potrace bitmap.
+
+    Returns:
+        None
+    """
+
     path_data = []
     for curve in path_bitmap:
         start_point = curve.start_point
@@ -233,19 +251,15 @@ def __combine_images_with_space(
     spacing: int = 20,
 ) -> Image:
     """
-    Combine multiple images with a specified spacing between them.
+    This function combines a list of images horizontally with an optional spacing between them.
 
-    Parameters
-    ----------
-    images : List[Image]
-        A list of PIL Images to combine.
-    spacing : int, optional
-        The spacing (in pixels) between the images, by default 10.
+    Args:
+        images (List[Image]): A list of PIL images to be combined.
+        labels (List[str]): A list of labels associated with each image.
+        spacing (int, optional): Spacing (in pixels) between images. Default is 20.
 
-    Returns
-    -------
-    Image
-        The combined PIL Image.
+    Returns:
+        Image: The combined image.
     """
 
     char_attention = ["g", "j", "p", "q", "y"]
@@ -289,6 +303,19 @@ def __combine_images_with_space(
 
 
 def __change_image_colors(image: Image, *, color: str) -> Image:
+    """
+    This function changes the colors of a handwriting based on the specified color.
+    It converts the image to RGB mode, processes the pixel data, and returns
+    the modified image.
+
+    Args:
+        image (Image): A PIL image to change the colors of.
+        color (str): The desired color to apply to the handwriting.
+
+    Returns:
+        Image: The modified image with adjusted colors.
+    """
+
     rgb_image = image.convert("RGB")
     datas = rgb_image.getdata()
     new_image_data = []

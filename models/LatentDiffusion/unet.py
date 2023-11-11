@@ -12,8 +12,21 @@ from .transformers import SpatialTransformer
 from .utils import GroupNorm32
 
 
-# noinspection PyMethodOverriding
 class TimestepEmbedSequential(nn.Sequential):
+    """
+    A custom sequential module that extends the behavior of a standard PyTorch `nn.Sequential`.
+    This module processes the input data through its submodules, which can include `ResBlock` and
+    `SpatialTransformer` layers.
+
+    Args:
+        x (Tensor): The input data.
+        t_emb (Tensor): The timestep embedding.
+        context (Tensor, optional): The context data for spatial transformers. Default is None.
+
+    Returns:
+        Tensor: The output of the sequential processing.
+    """
+
     def forward(self, x: Tensor, t_emb: Tensor, context: Tensor = None) -> Tensor:
         for layer in self:
             if isinstance(layer, ResBlock):
@@ -21,13 +34,49 @@ class TimestepEmbedSequential(nn.Sequential):
             elif isinstance(layer, SpatialTransformer):
                 x = layer(x, context=context)
             else:
-                # TODO: Hack - find what causes this to happen
                 x = layer(x.float())
 
         return x
 
 
 class UNetModel(nn.Module):
+    """
+    UNet-based neural network architecture for image generation.
+
+    Args:
+        in_channels (int): Number of input channels.
+        out_channels (int): Number of output channels.
+        channels (int): Base number of channels.
+        res_layers (int): Number of residual layers.
+        vocab_size (int): Vocabulary size for character encoding.
+        attention_levels (Tuple[int]): Tuple of attention levels.
+        channel_multipliers (Tuple[int]): Tuple of channel multipliers.
+        heads (int): Number of attention heads.
+        d_cond (int, optional): Dimension of cross-attention conditioning. Default is 768.
+        dropout (float, optional): Dropout rate. Default is 0.0.
+        n_style_classes (int, optional): Number of style classes. Default is None.
+        tf_layers (int, optional): Number of spatial transformer layers. Default is 1.
+        max_seq_len (int, optional): Maximum sequence length. Default is 20.
+
+    Attributes:
+        input_blocks (nn.ModuleList): List of input block modules.
+        middle_block (TimestepEmbedSequential): Middle block module.
+        output_blocks (nn.ModuleList): List of output block modules.
+        time_embed (nn.Sequential): Time embedding layer.
+        label_emb (nn.Embedding): Label embedding layer.
+        word_emb (CharacterEncoder): Character embedding layer.
+        out (nn.Sequential): Output layer.
+
+    Methods:
+        forward(x, time_steps, context=None, writer_id=None, interpolation=False, mix_rate=None):
+            Forward pass of the model.
+        time_step_embedding(time_steps, max_period=10000, repeat_only=False):
+            Compute the time step embedding.
+        interpolation(writer_id, t_emb, mix_rate=1.0):
+            Interpolate between writer styles.
+
+    """
+
     def __init__(
         self,
         in_channels: int,
@@ -235,6 +284,18 @@ class UNetModel(nn.Module):
     def time_step_embedding(
         self, time_steps: Tensor, *, max_period: int = 10000, repeat_only: bool = False
     ) -> Tensor:
+        """
+        Compute the time step embedding.
+
+        Args:
+            time_steps (Tensor): Timestep information.
+            max_period (int, optional): Maximum period. Default is 10000.
+            repeat_only (bool, optional): Whether to repeat the timestep information only. Default is False.
+
+        Returns:
+            Tensor: Time step embedding.
+        """
+
         if repeat_only:
             return repeat(time_steps, "b -> b d", d=self.channels)
 
@@ -314,6 +375,18 @@ class UNetModel(nn.Module):
         *,
         mix_rate: float = 1.0,
     ) -> Tensor:
+        """
+        Interpolate between writer styles.
+
+        Args:
+            writer_id (Tuple[int, int]): Writer IDs for interpolation.
+            t_emb (Tensor): Time step embedding.
+            mix_rate (float, optional): Mixing rate. Default is 1.0.
+
+        Returns:
+            Tensor: Interpolated time step embedding.
+        """
+
         if not isinstance(writer_id, tuple):
             raise TypeError(
                 f"Expected writer_id to be tuple for interpolation, got {type(writer_id).__name__}"
