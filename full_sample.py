@@ -210,7 +210,7 @@ def full_sampling():
         f"|| (Dataset) IS value: {isc_value_real[0]} +- {isc_value_real[1]}"
     )
 
-    with open(f"{config.checkpoint_path}/metrics.txt", mode="a") as f:
+    with open(f"{config.checkpoint_path}/metrics.txt", mode="a+") as f:
         f.write(
             f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} "
             f"|| Model: {MODELS_SN[args.config]} "
