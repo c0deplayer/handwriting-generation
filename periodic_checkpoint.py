@@ -6,6 +6,20 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 
 
 class PeriodicCheckpoint(ModelCheckpoint):
+    """
+    Custom callback for creating model checkpoints periodically during training.
+
+    Args:
+        every_steps (int): Number of training steps between successive checkpoints.
+        dirpath (Optional[Union[str, Path]]): Directory path for saving the checkpoints.
+        monitor (Optional[str]): Quantity to monitor for best model selection.
+        filename (Optional[str]): Filename template for saving checkpoints.
+        auto_insert_metric_name (bool): If True, automatically inserts the metric name into the filename.
+
+    Raises:
+        ValueError: If 'dirpath' is None or 'every_steps' is not greater than zero.
+    """
+
     def __init__(
         self,
         every_steps: int = 10000,

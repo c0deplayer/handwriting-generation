@@ -20,6 +20,13 @@ from periodic_checkpoint import PeriodicCheckpoint
 
 
 def cli_main():
+    """
+    Command-line interface for initializing and parsing arguments for model training,
+    including configurations and logging options.
+
+    Returns:
+        Namespace: A namespace object containing parsed arguments.
+    """
     parser = ArgumentParser()
     parser.add_argument(
         "-c",
@@ -53,6 +60,17 @@ def cli_main():
 
 
 def train_model():
+    """
+    Configures and initiates the training process for the selected model.
+
+    This function handles the setup of the PyTorch Lightning Trainer, model initialization,
+    data module preparation, and optional logging with Neptune. It supports different
+    configurations for models like Diffusion, RNN, and LatentDiffusion.
+
+    Raises:
+        SystemExit: If the Python version is below 3.8.
+    """
+
     global dataset
     trainer_params = dict(
         accelerator=config.device,

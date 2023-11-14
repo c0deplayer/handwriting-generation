@@ -1,4 +1,5 @@
 import os
+import random
 from pathlib import Path
 from typing import Tuple
 
@@ -14,6 +15,16 @@ from configs.settings import CONFIGS, MODELS, COLORS, MODELS_APP
 
 
 def load_model_and_config(selected_model: str) -> Tuple[pl.LightningModule, YAMLWizard]:
+    """
+    Loads a model and its configuration based on the selected model name.
+
+    Args:
+        selected_model (str): Name of the model to be loaded.
+
+    Returns:
+        Tuple[pl.LightningModule, YAMLWizard]: A tuple containing the loaded model and its configuration.
+    """
+
     checkpoint_path = f"model_checkpoints/{selected_model}/model.ckpt"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     config_file = f"configs/{selected_model}/base_gpu.yaml"
@@ -36,7 +47,27 @@ def handwriting_generation(
     selected_model: str,
     save_file: int,
     file_format: str,
+    seed: int,
 ) -> Image:
+    """
+    Generates handwriting based on the given parameters and model.
+
+    Args:
+        prompt (str): Text to be generated in handwriting.
+        selected_style (str): The style ID for handwriting generation.
+        color (str): Color of the handwriting.
+        selected_model (str): The model to use for generation.
+        save_file (int): Whether to save the file (1) or not (0).
+        file_format (str): Format of the saved file, e.g., 'PNG', 'JPEG'.
+        seed (int): Seed for random number generation to ensure reproducibility.
+
+    Returns:
+        Image: An image object representing the generated handwriting.
+
+    Raises:
+        gr.Error: If the style ID is not within the valid range for the selected model.
+    """
+
     if selected_model == "LatentDiffusion" and not (1 <= int(selected_style) <= 330):
         raise gr.Error("Style ID for Latent Diffusion must be between 1 and 330")
     elif selected_model == "Diffusion" and not (
@@ -86,6 +117,16 @@ def handwriting_generation(
 
 
 def dynamic_style_ids_update(selected_model: str) -> gr.Number:
+    """
+    Dynamically updates the style IDs based on the selected model.
+
+    Args:
+        selected_model (str): The model based on which the style IDs are updated.
+
+    Returns:
+        gr.Number: A Gradio number component with updated values and visibility based on the selected model.
+    """
+
     if selected_model == "Diffusion":
         return gr.Number(
             value=1,
@@ -102,6 +143,16 @@ def dynamic_style_ids_update(selected_model: str) -> gr.Number:
 
 
 def dynamic_image_save_update(save_image: int) -> gr.Radio:
+    """
+    Updates the visibility of the image save option based on the user's choice.
+
+    Args:
+        save_image (int): Indicates whether the image is to be saved (1) or not (0).
+
+    Returns:
+        gr.Radio: A Gradio radio button component with updated visibility.
+    """
+
     return gr.Radio(visible=False) if save_image else gr.Radio(visible=True)
 
 

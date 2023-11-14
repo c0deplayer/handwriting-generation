@@ -12,6 +12,13 @@ from data import utils
 
 
 def cli_main():
+    """
+    Command-line interface for initializing and parsing arguments.
+
+    Returns:
+        Namespace: A namespace object containing parsed arguments.
+    """
+
     parser = ArgumentParser()
     parser.add_argument(
         "-c",
@@ -33,6 +40,17 @@ def cli_main():
 
 
 def prepare_data():
+    """
+    Prepares and saves datasets for training and validation based on the specified model configurations.
+
+    The function identifies the model type, splits the dataset into training and validation sets,
+    and saves them in HDF5 and JSON formats as required. It handles different configurations
+    for models like LatentDiffusion, RNN, and Diffusion.
+
+    Raises:
+        FileNotFoundError: If specified dataset files do not exist and cannot be removed.
+    """
+
     is_latent = isinstance(config, ConfigLatentDiffusion)
     train_size = config.get("train_size", 0.8)
     val_size = 1.0 - train_size

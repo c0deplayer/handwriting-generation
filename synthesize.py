@@ -15,6 +15,14 @@ from configs.settings import MODELS, CONFIGS
 
 
 def cli_main():
+    """
+    Command-line interface for initializing and parsing arguments related to model configuration, text input,
+     and style settings.
+
+    Returns:
+        Namespace: A namespace object containing parsed arguments.
+    """
+
     parser = ArgumentParser()
     parser.add_argument(
         "-c",
@@ -68,6 +76,17 @@ def cli_main():
 
 
 def generate_handwriting() -> Union[Image, plt.Figure, List[Image], List[plt.Figure]]:
+    """
+    Generates handwriting based on the specified model and input parameters.
+
+    Depending on the model type (LatentDiffusion, RNN, or Diffusion), the function
+    loads the appropriate model checkpoint, configures it, and generates handwriting
+    images based on the provided text, style, and color.
+
+    Returns:
+        Union[Image, plt.Figure, List[Image], List[plt.Figure]]: Generated handwriting images or figures.
+    """
+
     model = MODELS[args.config].load_from_checkpoint(
         checkpoint_path=f"{config.checkpoint_path}/model.ckpt",
         map_location=torch.device(config.device),
