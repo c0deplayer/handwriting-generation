@@ -368,6 +368,7 @@ class DiffusionWrapper(pl.LightningModule):
         save_path: Optional[str],
         style_path: Union[str, Tensor],
         is_fid: bool = False,
+        seed: Optional[int] = None,
     ) -> Union[plt.Figure, List[plt.Figure]]:
         """
         Generate handwriting sequence images using the trained Diffusion Model.
@@ -383,10 +384,14 @@ class DiffusionWrapper(pl.LightningModule):
             style_path (Union[str, Tensor]): Path to the style image or the style vector.
             is_fid (bool, optional): Use FID (Fréchet Inception Distance) generation mode.
                 (default: False)
+            seed (int, optional): Seed for random number generator to ensure reproducibility of the generated image.
+                                 (default: None)
 
         Returns:
             Union[plt.Figure, List[plt.Figure]]: The generated handwriting sequence as a Matplotlib figure.
         """
+        if seed is not None:
+            pl.seed_everything(seed)
 
         if not is_fid:
             style_path = Path(f"assets/{style_path}")

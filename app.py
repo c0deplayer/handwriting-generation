@@ -62,21 +62,22 @@ def handwriting_generation(
         return model.generate(
             prompt,
             vocab=config.vocab,
+            max_text_len=config.max_text_len,
             writer_id=selected_style,
             save_path=save_path,
             color=color,
+            seed=seed,
         )
-    # TODO: RNN Model
-    elif selected_model == "RNN":
-        raise gr.Error("Not implemented")
 
     style_path = f"assets/{asset_dir[selected_style]}"
     fig = model.generate(
         prompt,
         save_path=save_path,
         vocab=config.vocab,
+        max_text_len=config.max_text_len,
         style_path=style_path,
         color=color,
+        seed=seed,
     )
 
     return ImageModule.frombytes(
@@ -98,8 +99,6 @@ def dynamic_style_ids_update(selected_model: str) -> gr.Number:
             label="Style ID (values: (1, 330))",
             visible=True,
         )
-    else:
-        return gr.Number(visible=False)
 
 
 def dynamic_image_save_update(save_image: int) -> gr.Radio:
@@ -160,13 +159,23 @@ if __name__ == "__main__":
                         outputs=save_type,
                     )
 
+                    seed = gr.Number(value=random.randint(0, 123456789), label="Seed")
+
                 submit = gr.Button("Submit")
 
             with gr.Column():
                 output = gr.Image(interactive=False, show_label=False)
                 submit.click(
                     fn=handwriting_generation,
-                    inputs=[text, style, color, model_type, save_image, save_type],
+                    inputs=[
+                        text,
+                        style,
+                        color,
+                        model_type,
+                        save_image,
+                        save_type,
+                        seed,
+                    ],
                     outputs=output,
                 )
 

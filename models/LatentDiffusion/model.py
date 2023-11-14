@@ -286,6 +286,7 @@ class LatentDiffusionModel(pl.LightningModule):
         is_fid: bool = False,
         interpolation: bool = False,
         mix_rate: Optional[float] = None,
+        seed: Optional[int] = None,
     ) -> Image:
         """
         Generate an image from the model.
@@ -300,10 +301,14 @@ class LatentDiffusionModel(pl.LightningModule):
             is_fid (bool, optional): Enable FID generation. Default is False.
             interpolation (bool, optional): Enable interpolation. Default is False.
             mix_rate (Optional[float]): Mixing rate. Default is None.
+            seed (int, optional): Seed for random number generator to ensure reproducibility of the generated image.
+                                  Default is None.
 
         Returns:
             Image: The generated image.
         """
+        if seed is not None:
+            pl.seed_everything(seed)
 
         if not is_fid:
             words = text_line.split(" ")
