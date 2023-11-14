@@ -185,3 +185,6 @@ data/h5_dataset/
 
 # Images of generated handwriting
 images/
+
+# PDM file
+.pdm-python

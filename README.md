@@ -1,9 +1,23 @@
-# Handwriting Generation [WIP]
+# Handwriting Generation
+[![pdm-managed](https://img.shields.io/badge/pdm-managed-blueviolet)](https://pdm-project.org)
 
 ## Requirements
-
-* Python >= 3.8
-* WIP
+```
+    black>=23.11.0,
+    gradio>=4.3.0,
+    torch>=2.1.1,
+    torchvision>=0.16.1,
+    torchaudio>=2.1.1,
+    lightning[extra]>=2.1.1,
+    torchmetrics>=1.2.0,
+    einops>=0.7.0,
+    neptune>=1.8.3,
+    dataclass-wizard>=0.22.2,
+    setuptools>=68.2.2,
+    h5py>=3.10.0,
+    diffusers[torch]>=0.23.0,
+    potracer>=0.0.4
+```
 
 ## Datasets & Pre-processing
 
