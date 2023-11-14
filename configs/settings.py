@@ -30,6 +30,6 @@ DATASETS = {
     "LatentDiffusion": IAMDataset,
 }
 
-MODELS_APP = ["RNN", "Diffusion", "LatentDiffusion"]
+MODELS_APP = ["Diffusion", "LatentDiffusion"]
 COLORS = list(plt_colors.CSS4_COLORS.keys())
 CALCULATION_BASE_DIR = "./calc_data"
