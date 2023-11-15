@@ -2,7 +2,8 @@ import math
 
 import torch
 from einops import rearrange
-from torch import nn as nn, Tensor
+from torch import Tensor
+from torch import nn as nn
 
 
 class PositionalEncoder(nn.Module):

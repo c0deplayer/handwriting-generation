@@ -1,12 +1,13 @@
 import math
 import os
-from typing import Union, List, Optional
+from typing import List, Optional, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from einops import rearrange, repeat
-from torch import Tensor, nn as nn
+from torch import Tensor
+from torch import nn as nn
 
 from data.utils import uniquify
 

@@ -3,15 +3,15 @@ import random
 import sys
 from argparse import ArgumentParser
 from pathlib import Path
-from typing import Union, List
+from typing import List, Union
 
 import numpy as np
 import torch
 import yaml
-from PIL.Image import Image
 from matplotlib import pyplot as plt
+from PIL.Image import Image
 
-from configs.settings import MODELS, CONFIGS
+from configs.settings import CONFIGS, MODELS
 
 
 def cli_main():

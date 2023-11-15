@@ -3,15 +3,15 @@ import random
 from pathlib import Path
 from typing import Tuple
 
-import PIL.Image as ImageModule
 import gradio as gr
 import lightning.pytorch as pl
+import PIL.Image as ImageModule
 import torch
-from PIL.Image import Image
 from dataclass_wizard import YAMLWizard
+from PIL.Image import Image
 from ruamel import yaml
 
-from configs.settings import CONFIGS, MODELS, COLORS, MODELS_APP
+from configs.settings import COLORS, CONFIGS, MODELS, MODELS_APP
 
 
 def load_model_and_config(selected_model: str) -> Tuple[pl.LightningModule, YAMLWizard]:

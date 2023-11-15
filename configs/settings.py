@@ -1,7 +1,7 @@
 import matplotlib.colors as plt_colors
 
-from configs.config import ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion
-from data.dataset import IAMonDataset, IAMDataset
+from configs.config import ConfigDiffusion, ConfigLatentDiffusion, ConfigRNN
+from data.dataset import IAMDataset, IAMonDataset
 from models.Diffusion.model import DiffusionWrapper
 from models.LatentDiffusion.model import LatentDiffusionModel
 from models.RNN.model import RNNModel

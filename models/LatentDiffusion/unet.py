@@ -1,13 +1,13 @@
 import math
-from typing import Tuple, List, Union, Optional
+from typing import List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
-from einops import repeat, rearrange
+from einops import rearrange, repeat
 from torch import Tensor
 
 from .encoder import CharacterEncoder
-from .residual import ResBlock, DownSample, UpSample
+from .residual import DownSample, ResBlock, UpSample
 from .transformers import SpatialTransformer
 from .utils import GroupNorm32
 

@@ -2,7 +2,7 @@ import itertools
 import math
 
 import torch
-from torch import nn, Tensor
+from torch import Tensor, nn
 
 from .attention import WordAttention
 

@@ -1,16 +1,18 @@
 import os
 from pathlib import Path
-from typing import Tuple, List, Union, Optional
+from typing import List, Optional, Tuple, Union
 
 import potrace
 import torch
 import torchvision.transforms
-from PIL import Image as ImageModule, ImageColor, ImageOps
-from PIL.Image import Image
 from einops import rearrange
-from torch import nn, Tensor
+from PIL import Image as ImageModule
+from PIL import ImageColor, ImageOps
+from PIL.Image import Image
+from torch import Tensor, nn
 
 from data.utils import uniquify
+
 from .activation import GeGLU
 
 T2PIL = torchvision.transforms.ToPILImage()

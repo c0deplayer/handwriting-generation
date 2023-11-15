@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Any, Literal, Union, Dict, List, Tuple
+from typing import Any, Dict, List, Literal, Tuple, Union
 
 import lightning.pytorch as pl
 import torch
@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader, Dataset
 
 from configs.config import ConfigDiffusion, ConfigLatentDiffusion, ConfigRNN
 from models.Diffusion.text_style import StyleExtractor
+
 from . import utils
 from .tokenizer import Tokenizer
 

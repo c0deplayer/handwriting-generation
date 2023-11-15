@@ -4,16 +4,17 @@ import warnings
 import xml.etree.ElementTree as ET
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Union, Dict, List, Tuple, Any, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-import PIL
 import h5py
 import numpy as np
+import PIL
 import torch
 import torch.nn.functional as F
-from PIL import Image as ImageModule, ImageOps
-from PIL.Image import Image
 from numpy.linalg import norm
+from PIL import Image as ImageModule
+from PIL import ImageOps
+from PIL.Image import Image
 from rich.progress import track
 from torch import Tensor
 from torchvision.transforms import Normalize

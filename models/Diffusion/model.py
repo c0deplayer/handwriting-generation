@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Tuple, Dict, Union, Any, Optional, List
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import lightning.pytorch as pl
 import torch
@@ -15,14 +15,15 @@ from torch.optim.lr_scheduler import LRScheduler
 from torchvision import transforms
 
 from data.tokenizer import Tokenizer
-from data.utils import get_image, get_encoded_text_with_one_hot_encoding
+from data.utils import get_encoded_text_with_one_hot_encoding, get_image
+
+from ..ema import ExponentialMovingAverage
 from . import utils
 from .attention import AttentionBlock
 from .cnn import ConvBlock
 from .inv_sqrt_scheduler import InverseSqrtScheduler
 from .text_style import StyleExtractor, TextStyleEncoder
 from .utils import FeedForwardNetwork
-from ..ema import ExponentialMovingAverage
 
 
 class DiffusionModel(nn.Module):

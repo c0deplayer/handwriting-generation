@@ -8,13 +8,10 @@ import lightning.pytorch as pl
 import neptune
 import torch
 import yaml
-from lightning.pytorch.callbacks import (
-    RichModelSummary,
-    RichProgressBar,
-)
+from lightning.pytorch.callbacks import RichModelSummary, RichProgressBar
 from lightning.pytorch.loggers.neptune import NeptuneLogger
 
-from configs.settings import MODELS, MODELS_SN, CONFIGS, DATASETS
+from configs.settings import CONFIGS, DATASETS, MODELS, MODELS_SN
 from data.dataset import DataModule
 from periodic_checkpoint import PeriodicCheckpoint
 

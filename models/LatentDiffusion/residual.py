@@ -1,5 +1,5 @@
 from einops import rearrange
-from torch import nn, Tensor
+from torch import Tensor, nn
 
 from .utils import GroupNorm32
 

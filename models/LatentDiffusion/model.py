@@ -1,12 +1,12 @@
 from pathlib import Path
-from typing import Any, Dict, Tuple, Union, Optional
+from typing import Any, Dict, Optional, Tuple, Union
 
 import lightning.pytorch as pl
 import torch
 import torch.nn.functional as F
-from PIL.Image import Image
 from diffusers import AutoencoderKL
 from einops import rearrange, repeat
+from PIL.Image import Image
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 from rich.progress import track
 from torch import Tensor, nn
@@ -15,6 +15,7 @@ from torch.optim import Optimizer
 from data.tokenizer import Tokenizer
 from data.utils import get_encoded_text_with_one_hot_encoding
 from models.ema import ExponentialMovingAverage
+
 from . import utils
 from .unet import UNetModel
 
