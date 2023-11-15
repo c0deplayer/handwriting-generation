@@ -4,7 +4,6 @@
 ## Requirements
 ```
     Python>=3.8,
-    black>=23.11.0,
     gradio>=4.3.0,
     torch>=2.1.1,
     torchvision>=0.16.1,
@@ -17,7 +16,8 @@
     setuptools>=68.2.2,
     h5py>=3.10.0,
     diffusers[torch]>=0.23.0,
-    potracer>=0.0.4
+    potracer>=0.0.4,
+    clean-fid>=0.1.35
 ```
 
 ## Datasets & Pre-processing
