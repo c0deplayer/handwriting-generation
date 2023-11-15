@@ -3,6 +3,7 @@
 
 ## Requirements
 ```
+    Python>=3.8,
     black>=23.11.0,
     gradio>=4.3.0,
     torch>=2.1.1,
