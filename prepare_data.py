@@ -78,7 +78,7 @@ def prepare_data():
         json_file_path_train = Path("data/json_writer_ids/train_writer_ids.json")
         json_file_path_val = Path("data/json_writer_ids/val_writer_ids.json")
 
-    with contextlib.suppress(FileNotFoundError):
+    with contextlib.suppress(FileNotFoundError, TypeError):
         os.remove(h5_file_path_train)
         os.remove(h5_file_path_val)
         os.remove(json_file_path_train)
