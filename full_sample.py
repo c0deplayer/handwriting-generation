@@ -5,28 +5,35 @@ import sys
 from argparse import ArgumentParser
 from datetime import datetime
 from pathlib import Path
-from typing import Union, List
+from typing import List, Union
 
 import PIL.Image as ImageModule
 import torch
 import torchvision
 import yaml
-from PIL import ImageOps
-from PIL.Image import Image
 from cleanfid import fid
 from einops import rearrange, repeat
 from matplotlib import pyplot as plt
+from PIL import ImageOps
+from PIL.Image import Image
 from torch import Tensor
 from torch.utils.data import DataLoader
 from torchmetrics.image.inception import InceptionScore
 from torchvision.utils import save_image
 
-from configs.settings import MODELS, MODELS_SN, CONFIGS, CALCULATION_BASE_DIR
+from configs.settings import CALCULATION_BASE_DIR, CONFIGS, MODELS, MODELS_SN
 from data import utils
 from data.dataset import IAMDataset, IAMonDataset
 
 
 def cli_main():
+    """
+    Command-line interface for initializing and parsing arguments.
+
+    Returns:
+        Namespace: A namespace object containing parsed arguments.
+    """
+
     parser = ArgumentParser()
     parser.add_argument(
         "-c",
@@ -54,6 +61,15 @@ def cli_main():
 
 
 def full_sampling():
+    """
+    Conducts full sampling for generated and real images to calculate
+    metrics like Inception Score (IS) and Frechet Inception Distance (FID).
+
+    This function iterates over a dataset, generates handwriting samples using a model,
+    and calculates IS and FID for these samples compared to real images. It handles different
+    configurations for models like LatentDiffusion and others. The results are saved and printed.
+    """
+
     num_of_image = 1
     isc_fake = InceptionScore(normalize=False)
     isc_real = InceptionScore(normalize=False)
@@ -206,8 +222,8 @@ def full_sampling():
         f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} "
         f"|| Model: {MODELS_SN[args.config]} "
         f"|| FID value: {fid_value} "
-        f"|| IS value: {isc_value_fake[0]} +- {isc_value_fake[1]}"
-        f"|| (Dataset) IS value: {isc_value_real[0]} +- {isc_value_real[1]}"
+        f"|| IS value: {isc_value_fake[0]} +- {isc_value_fake[1]} "
+        f"|| (Dataset) IS value: {isc_value_real[0]} +- {isc_value_real[1]}\n"
     )
 
     with open(f"{config.checkpoint_path}/metrics.txt", mode="a+") as f:
@@ -215,14 +231,25 @@ def full_sampling():
             f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} "
             f"|| Model: {MODELS_SN[args.config]} "
             f"|| FID value: {fid_value} "
-            f"|| IS value: {isc_value_fake[0]} +- {isc_value_fake[1]}"
-            f"|| (Dataset) IS value: {isc_value_real[0]} +- {isc_value_real[1]}"
+            f"|| IS value: {isc_value_fake[0]} +- {isc_value_fake[1]} "
+            f"|| (Dataset) IS value: {isc_value_real[0]} +- {isc_value_real[1]}\n"
         )
 
 
 def generate_handwriting(
     text: Tensor, style: Tensor
 ) -> Union[Image, plt.Figure, List[Image], List[plt.Figure]]:
+    """
+    Generates handwriting samples based on given text and style using the specified model.
+
+    Args:
+        text (Tensor): Input tensor representing text.
+        style (Tensor): Style tensor representing handwriting style or writer ID.
+
+    Returns:
+        Union[Image, plt.Figure, List[Image], List[plt.Figure]]: Generated handwriting images or figures.
+    """
+
     if args.config == "LatentDiffusion":
         return model.generate(
             text,
