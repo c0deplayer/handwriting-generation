@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["cross_platform"]
 lock_version = "4.4"
-content_hash = "sha256:ae7f19b81679b786962f24fd79d83cbd7a03529b69140b95c09fa5fe8e4469a9"
+content_hash = "sha256:cc1f46f87b23955c368937a0ee0b564dd4dac57f08f0df14c992802fcedeb28c"
 
 [[package]]
 name = "accelerate"
@@ -1421,7 +1421,7 @@ files = [
 
 [[package]]
 name = "lightning"
-version = "2.1.1"
+version = "2.1.2"
 requires_python = ">=3.8"
 summary = "The Deep Learning framework to train, deploy, and ship AI products Lightning fast."
 dependencies = [
@@ -1437,8 +1437,8 @@ dependencies = [
     "typing-extensions<6.0,>=4.0.0",
 ]
 files = [
-    {file = "lightning-2.1.1-py3-none-any.whl", hash = "sha256:c1ea10fd112600eda5210bf3dc6d01d82cec6d70a6187e44b800cbb50be7346e"},
-    {file = "lightning-2.1.1.tar.gz", hash = "sha256:865491940d20a9754eac7494aa18cab893e0c2b31e83743349eeeaf31dfb52db"},
+    {file = "lightning-2.1.2-py3-none-any.whl", hash = "sha256:f23358dedd8f5f1151475c9d95f33e4529591c992a99cb9ae89c84bca7289525"},
+    {file = "lightning-2.1.2.tar.gz", hash = "sha256:3b2599a8a719916cb03526e6570356809729680c6cda09391232e2aba0a4ed4b"},
 ]
 
 [[package]]
@@ -1452,7 +1452,7 @@ files = [
 
 [[package]]
 name = "lightning-cloud"
-version = "0.5.50"
+version = "0.5.52"
 requires_python = ">=3.7.0"
 summary = "Lightning Cloud"
 dependencies = [
@@ -1469,8 +1469,8 @@ dependencies = [
     "websocket-client",
 ]
 files = [
-    {file = "lightning_cloud-0.5.50-py3-none-any.whl", hash = "sha256:737ff83f09856b298db15a88295db9e5ab8c14f70977fe4f6374063a107a545a"},
-    {file = "lightning_cloud-0.5.50.tar.gz", hash = "sha256:3ea52b17d34865f4190faa7ccc832c65d547d5a238250f854a02bd330fcc2750"},
+    {file = "lightning_cloud-0.5.52-py3-none-any.whl", hash = "sha256:cf26e058f1e3d8e4ae4b2085e2d00b479e6026c689317f7ddd96d1b544f5632d"},
+    {file = "lightning_cloud-0.5.52.tar.gz", hash = "sha256:28c3b825e6deef81bdef0b2271e6a422cc61a7ddd798e556d71d2e7209aa9198"},
 ]
 
 [[package]]
@@ -1507,7 +1507,7 @@ files = [
 
 [[package]]
 name = "lightning"
-version = "2.1.1"
+version = "2.1.2"
 extras = ["extra"]
 requires_python = ">=3.8"
 summary = "The Deep Learning framework to train, deploy, and ship AI products Lightning fast."
@@ -1530,10 +1530,10 @@ dependencies = [
     "inquirer<4.0,>=2.10.0",
     "jsonargparse[signatures]<5.0,>=4.18.0",
     "lightning-api-access>=0.0.3",
-    "lightning-cloud==0.5.50",
+    "lightning-cloud==0.5.52",
     "lightning-fabric>=1.9.0",
     "lightning-utilities<1.0,>=0.8.0",
-    "lightning==2.1.1",
+    "lightning==2.1.2",
     "matplotlib<4.0,>3.1",
     "omegaconf<3.0,>=2.0.5",
     "packaging",
@@ -1556,8 +1556,8 @@ dependencies = [
     "websockets<12.0",
 ]
 files = [
-    {file = "lightning-2.1.1-py3-none-any.whl", hash = "sha256:c1ea10fd112600eda5210bf3dc6d01d82cec6d70a6187e44b800cbb50be7346e"},
-    {file = "lightning-2.1.1.tar.gz", hash = "sha256:865491940d20a9754eac7494aa18cab893e0c2b31e83743349eeeaf31dfb52db"},
+    {file = "lightning-2.1.2-py3-none-any.whl", hash = "sha256:f23358dedd8f5f1151475c9d95f33e4529591c992a99cb9ae89c84bca7289525"},
+    {file = "lightning-2.1.2.tar.gz", hash = "sha256:3b2599a8a719916cb03526e6570356809729680c6cda09391232e2aba0a4ed4b"},
 ]
 
 [[package]]
