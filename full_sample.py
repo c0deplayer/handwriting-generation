@@ -1,5 +1,6 @@
 import contextlib
 import math
+import os
 import shutil
 import sys
 from argparse import ArgumentParser
@@ -63,10 +64,11 @@ def cli_main():
 def full_sampling():
     """
     Conducts full sampling for generated and real images to calculate
-    metrics like Inception Score (IS) and Frechet Inception Distance (FID).
+    metrics like Inception Score (IS), Frechet Inception Distance (FID)
+    and Kernel Inception Distance (KID).
 
     This function iterates over a dataset, generates handwriting samples using a model,
-    and calculates IS and FID for these samples compared to real images. It handles different
+    and calculates IS, FID and KID for these samples compared to real images. It handles different
     configurations for models like LatentDiffusion and others. The results are saved and printed.
     """
 
@@ -217,11 +219,23 @@ def full_sampling():
     fid_value = fid.compute_fid(
         fdir1=f"{CALCULATION_BASE_DIR}/real_samples",
         fdir2=f"{CALCULATION_BASE_DIR}/fake_samples",
+        batch_size=config.batch_size // 2,
+        num_workers=os.cpu_count() // 4,
+        device=device,
     )
+    kid_value = fid.compute_kid(
+        fdir1=f"{CALCULATION_BASE_DIR}/real_samples",
+        fdir2=f"{CALCULATION_BASE_DIR}/fake_samples",
+        batch_size=config.batch_size // 2,
+        num_workers=os.cpu_count() // 4,
+        device=device,
+    )
+
     print(
         f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} "
         f"|| Model: {MODELS_SN[args.config]} "
         f"|| FID value: {fid_value} "
+        f"|| KID value: {kid_value} "
         f"|| IS value: {isc_value_fake[0]} +- {isc_value_fake[1]} "
         f"|| (Dataset) IS value: {isc_value_real[0]} +- {isc_value_real[1]}\n"
     )
@@ -231,6 +245,7 @@ def full_sampling():
             f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} "
             f"|| Model: {MODELS_SN[args.config]} "
             f"|| FID value: {fid_value} "
+            f"|| KID value: {kid_value} "
             f"|| IS value: {isc_value_fake[0]} +- {isc_value_fake[1]} "
             f"|| (Dataset) IS value: {isc_value_real[0]} +- {isc_value_real[1]}\n"
         )
