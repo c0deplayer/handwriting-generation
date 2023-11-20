@@ -7,9 +7,6 @@ authors = [
 ]
 dependencies = [
     "gradio>=4.3.0",
-    "torch @ https://download.pytorch.org/whl/test/cu121/torch-2.1.1%2Bcu121-cp311-cp311-linux_x86_64.whl",
-    "torchvision @ https://download.pytorch.org/whl/test/cu121/torchvision-0.16.1%2Bcu121-cp311-cp311-linux_x86_64.whl",
-    "torchaudio @ https://download.pytorch.org/whl/test/cu121/torchaudio-2.1.1%2Bcu121-cp311-cp311-linux_x86_64.whl",
     "lightning[extra]>=2.1.1",
     "torchmetrics>=1.2.0",
     "einops>=0.7.0",
@@ -21,6 +18,10 @@ dependencies = [
     "potracer>=0.0.4",
     "clean-fid>=0.1.35",
     "black>=23.11.0",
+    "scipy>=1.10.1",
+    "torch>=2.1.1",
+    "torchvision>=0.16.1",
+    "torchaudio>=2.1.1",
 ]
 requires-python = ">=3.8,<3.12"
 readme = "README.md"
