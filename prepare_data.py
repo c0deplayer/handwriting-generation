@@ -68,17 +68,17 @@ def prepare_data():
     h5_file_path_val = Path(
         f"./data/h5_dataset/val_{'iamondb' if args.config in ('Diffusion', 'RNN') else 'iamdb'}.h5"
     )
+    json_file_path_train = Path(
+        f"data/json_writer_ids/train_writer_ids_{'iamondb' if args.config in ('Diffusion', 'RNN') else 'iamdb'}.json"
+    )
+    json_file_path_val = Path(
+        f"data/json_writer_ids/val_writer_ids_{'iamondb' if args.config in ('Diffusion', 'RNN') else 'iamdb'}.json"
+    )
 
     if args.config in ("Diffusion", "RNN"):
-        json_file_path_train = None
-        json_file_path_val = None
-
         kwargs_dataset["max_seq_len"] = config.max_seq_len
-    else:
-        json_file_path_train = Path("data/json_writer_ids/train_writer_ids.json")
-        json_file_path_val = Path("data/json_writer_ids/val_writer_ids.json")
 
-    with contextlib.suppress(FileNotFoundError, TypeError):
+    with contextlib.suppress(FileNotFoundError):
         os.remove(h5_file_path_train)
         os.remove(h5_file_path_val)
         os.remove(json_file_path_train)
@@ -90,7 +90,7 @@ def prepare_data():
         dataset.dataset,
         (h5_file_path_train, json_file_path_train),
         is_latent=is_latent,
-        map_writer_ids=dataset.map_writer_id if is_latent else None,
+        map_writer_ids=dataset.map_writer_id,
     )
 
     kwargs_dataset["max_files"] = val_size * config.max_files
@@ -102,7 +102,7 @@ def prepare_data():
         dataset.dataset,
         (h5_file_path_val, json_file_path_val),
         is_latent=is_latent,
-        map_writer_ids=dataset.map_writer_id if is_latent else None,
+        map_writer_ids=dataset.map_writer_id,
     )
 
 

@@ -198,7 +198,7 @@ class IAMonDataset(Dataset):
         __load_dataset__(self) -> None:
             Load the dataset from an HDF5 file or preprocess it if necessary.
 
-        preprocess_data(self) -> List[Dict[str, Any]]:
+        preprocess_data(self) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
             Preprocess the dataset by loading and formatting data from the raw IAM Online dataset.
 
         __getitem__(self, index: int) -> Tuple[Tensor, ...]:
@@ -223,11 +223,13 @@ class IAMonDataset(Dataset):
         dataset_type: Literal["train", "val", "test"],
         *,
         strict: bool = False,
+        inception: bool = False,
     ) -> None:
         super().__init__()
 
         self.__config = config
         self._strict = strict
+        self._inception = inception
         self.img_height = img_height
         self.img_width = img_width
         self.max_seq_len = (
@@ -237,7 +239,7 @@ class IAMonDataset(Dataset):
         )
         self.max_text_len = max_text_len
         self.max_files = max_files
-        self.diffusion = isinstance(config, ConfigDiffusion)
+        self._diffusion = isinstance(config, ConfigDiffusion)
 
         self.style_extractor = StyleExtractor(device=torch.device(config.device))
         self.tokenizer = Tokenizer(config.vocab)
@@ -254,7 +256,9 @@ class IAMonDataset(Dataset):
             self.dataset_txt = f.readlines()
 
         self.__load_dataset__()
-        print(f"Size of dataset: {len(self.dataset)}")
+        print(
+            f"Size of dataset: {len(self.dataset)} || Length of writer styles -- {len(self.map_writer_id)}"
+        )
 
         # if not self.diffusion:
         #     self._mean = utils.compute_mean(self.dataset)
@@ -262,13 +266,18 @@ class IAMonDataset(Dataset):
 
     def __load_dataset__(self) -> None:
         h5_file_path = Path(f"./data/h5_dataset/{self.dataset_type}_iamondb.h5")
+        json_file_path = Path(
+            f"./data/json_writer_ids/{self.dataset_type}_writer_ids_iamondb.json"
+        )
         if h5_file_path.is_file() and not self._strict:
-            self.__dataset, _ = utils.load_dataset((h5_file_path, None), self.max_files)
+            self.__dataset, self.__map_writer_id = utils.load_dataset(
+                (h5_file_path, json_file_path), self.max_files
+            )
         else:
-            self.__dataset = self.preprocess_data()
+            self.__dataset, self.__map_writer_id = self.preprocess_data()
 
-    def preprocess_data(self) -> List[Dict[str, Any]]:
-        dataset = []
+    def preprocess_data(self) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+        dataset, map_writer_id = [], {}
         raw_data_path = Path(self.config.data_path)
         ascii_path = raw_data_path / "ascii"
         strokes_path = raw_data_path / "lineStrokes"
@@ -314,7 +323,7 @@ class IAMonDataset(Dataset):
                     torch.float32
                 )
                 writer_image = rearrange(writer_image, "1 h w -> 1 1 h w")
-                with torch.no_grad():
+                with torch.inference_mode():
                     style = self.style_extractor(writer_image)
 
                 dataset.append(
@@ -330,10 +339,13 @@ class IAMonDataset(Dataset):
                     }
                 )
 
-                if self.max_files and len(dataset) >= self.max_files:
-                    return dataset
+                if writer_id not in map_writer_id.keys():
+                    map_writer_id[writer_id] = len(map_writer_id)
 
-        return dataset
+                if self.max_files and len(dataset) >= self.max_files:
+                    return dataset, map_writer_id
+
+        return dataset, map_writer_id
 
     @property
     def config(self) -> Union[ConfigDiffusion, ConfigRNN]:
@@ -342,6 +354,10 @@ class IAMonDataset(Dataset):
     @property
     def dataset(self) -> List[Dict[str, Any]]:
         return self.__dataset
+
+    @property
+    def map_writer_id(self) -> Dict[str, int]:
+        return self.__map_writer_id
 
     # @property
     # def mean(self) -> Tensor:
@@ -358,7 +374,14 @@ class IAMonDataset(Dataset):
     #     return strokes * self.std + self.mean
 
     def __getitem__(self, index: int) -> Tuple[Tensor, ...]:
-        if self.diffusion:
+        if self._inception:
+            image = torchvision.transforms.ToTensor()(self.dataset[index]["image"])
+            w_index = str(self.dataset[index]["writer"])
+
+            writer_id = torch.tensor(self.map_writer_id[w_index], dtype=torch.int32)
+
+            return writer_id, image, Tensor([0.0])
+        elif self._diffusion:
             strokes = torch.tensor(self.dataset[index]["strokes"], dtype=torch.float32)
             text = torch.tensor(self.dataset[index]["text"])
             style = self.dataset[index]["style"]
@@ -457,7 +480,7 @@ class IAMDataset(Dataset):
     def __load_data__(self) -> None:
         h5_file_path = Path(f"./data/h5_dataset/{self.dataset_type}_iamdb.h5")
         json_file_path = Path(
-            f"./data/json_writer_ids/{self.dataset_type}_writer_ids.json"
+            f"./data/json_writer_ids/{self.dataset_type}_writer_ids_iamdb.json"
         )
 
         if h5_file_path.is_file() and json_file_path.is_file() and not self._strict:

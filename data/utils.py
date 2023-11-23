@@ -419,7 +419,6 @@ def load_dataset(
         path (Tuple[Path, Optional[Path]]): A tuple containing the path to the H5 file and, optionally,
                                             the path to a JSON file.
         max_files (int): The maximum number of files to load from the dataset.
-        latent (bool, optional): If True, load latent data; otherwise, load non-latent data. Defaults to False.
 
     Returns:
         Tuple[List[Dict[str, Any], Optional[Dict[str, int]]]: A tuple containing a list of dictionaries
@@ -436,9 +435,8 @@ def load_dataset(
     """
 
     map_writer_id = None
-    if latent:
-        with open(path[1], mode="r") as fp:
-            map_writer_id = json.load(fp)
+    with open(path[1], mode="r") as fp:
+        map_writer_id = json.load(fp)
 
     with h5py.File(path[0], mode="r") as f:
         dataset = []
@@ -481,7 +479,7 @@ def save_dataset(
     path: Tuple[Path, Optional[Path]],
     *,
     is_latent: bool = False,
-    map_writer_ids: Optional[Dict[str, int]] = None,
+    map_writer_ids: Dict[str, int],
 ) -> None:
     """
     This function saves a dataset to an H5 file and, optionally, a JSON file containing writer ID mappings.
@@ -509,9 +507,8 @@ def save_dataset(
         ```
     """
 
-    if map_writer_ids is not None:
-        with open(path[1], mode="w") as fp:
-            json.dump(map_writer_ids, fp, indent=4)
+    with open(path[1], mode="w") as fp:
+        json.dump(map_writer_ids, fp, indent=4)
 
     with h5py.File(path[0], mode="w") as f:
         dataset_h5 = f.create_group("dataset_group")
