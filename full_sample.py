@@ -25,6 +25,7 @@ from torchvision.utils import save_image
 from configs.settings import CALCULATION_BASE_DIR, CONFIGS, MODELS, MODELS_SN
 from data import utils
 from data.dataset import IAMDataset, IAMonDataset
+from metrics import FolderDataset, HWDScore
 
 
 def cli_main():
@@ -65,16 +66,17 @@ def full_sampling():
     """
     Conducts full sampling for generated and real images to calculate
     metrics like Inception Score (IS), Frechet Inception Distance (FID)
-    and Kernel Inception Distance (KID).
+    Kernel Inception Distance (KID) and Handwriting Distance (HWD).
 
     This function iterates over a dataset, generates handwriting samples using a model,
-    and calculates IS, FID and KID for these samples compared to real images. It handles different
+    and calculates IS, FID, KID and HWD for these samples compared to real images. It handles different
     configurations for models like LatentDiffusion and others. The results are saved and printed.
     """
 
     num_of_image = 1
     isc_fake = InceptionScore(normalize=False)
     isc_real = InceptionScore(normalize=False)
+    hwd = HWDScore(device=config.device)
     kwargs_dataset = dict(
         config=config,
         img_height=config.img_height,
@@ -214,6 +216,13 @@ def full_sampling():
             isc_fake.update(fake_samples)
             isc_real.update(real_samples)
 
+    real_dataset = FolderDataset(
+        f"{CALCULATION_BASE_DIR}/real_samples", extension="jpeg"
+    )
+    fake_dataset = FolderDataset(
+        f"{CALCULATION_BASE_DIR}/fake_samples", extension="jpeg"
+    )
+    hwd_value = hwd(real_dataset, fake_dataset)
     isc_value_fake = isc_fake.compute()
     isc_value_real = isc_real.compute()
     fid_value = fid.compute_fid(
@@ -236,6 +245,7 @@ def full_sampling():
         f"|| Model: {MODELS_SN[args.config]} "
         f"|| FID value: {fid_value} "
         f"|| KID value: {kid_value} "
+        f"|| HWD value: {hwd_value} "
         f"|| IS value: {isc_value_fake[0]} +- {isc_value_fake[1]} "
         f"|| (Dataset) IS value: {isc_value_real[0]} +- {isc_value_real[1]}\n"
     )
@@ -246,6 +256,7 @@ def full_sampling():
             f"|| Model: {MODELS_SN[args.config]} "
             f"|| FID value: {fid_value} "
             f"|| KID value: {kid_value} "
+            f"|| HWD value: {hwd_value} "
             f"|| IS value: {isc_value_fake[0]} +- {isc_value_fake[1]} "
             f"|| (Dataset) IS value: {isc_value_real[0]} +- {isc_value_real[1]}\n"
         )
