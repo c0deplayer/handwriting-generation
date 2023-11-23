@@ -94,7 +94,7 @@ class DiffusionWrapper(nn.Module):
             alpha = alpha.to(device=word.device)
             alpha_bar = alpha_bar.to(device=word.device)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             x = torch.randn(
                 (batch_size, 4, self.img_size[0] // 8, self.img_size[1] // 8),
                 device=word.device,
@@ -254,7 +254,7 @@ class LatentDiffusionModel(pl.LightningModule):
     def validation_step(
         self, batch: Tuple[Tensor, Tensor, Tensor], batch_idx: int
     ) -> Tensor:
-        with torch.no_grad():
+        with torch.inference_mode():
             noise_pred, noise = self(batch)
 
             loss = F.mse_loss(noise_pred, noise, reduction="mean")

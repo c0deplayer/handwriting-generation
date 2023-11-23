@@ -98,7 +98,7 @@ class ExponentialMovingAverage(nn.Module):
     def model(self) -> nn.Module:
         return self.ema_model
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def update_moving_average(self) -> None:
         current_decay = self.get_current_decay()
 

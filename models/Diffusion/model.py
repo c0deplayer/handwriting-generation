@@ -279,7 +279,7 @@ class DiffusionWrapper(pl.LightningModule):
         strokes_perturbed = torch.sqrt(alphas) * strokes + torch.sqrt(1 - alphas) * eps
         model_batch = (strokes_perturbed, text, torch.sqrt(alphas), style)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             strokes_pred, pen_lifts_pred, _ = self(model_batch)
 
             loss_batch = (eps, strokes_pred, pen_lifts, pen_lifts_pred, alphas)
@@ -422,7 +422,7 @@ class DiffusionWrapper(pl.LightningModule):
         beta_len = len(self.beta)
         strokes = torch.randn((batch_size, time_steps, 2), device=self.device)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             for i in track(range(beta_len - 1, -1, -1)):
                 alpha = self.alpha[i] * torch.ones(
                     (batch_size, 1, 1), device=self.device
@@ -435,7 +435,7 @@ class DiffusionWrapper(pl.LightningModule):
                 )
                 batch = (strokes, text, torch.sqrt(alpha), style_vector)
 
-                with torch.no_grad():
+                with torch.inference_mode():
                     model_out, pen_lifts, _ = (
                         self.ema(batch) if self.use_ema else self(batch)
                     )
