@@ -188,3 +188,7 @@ images/
 
 # PDM file
 .pdm-python
+
+# Other
+.sync.ffs_db
+auto_fs_*
