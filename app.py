@@ -3,13 +3,13 @@ import random
 from pathlib import Path
 from typing import Tuple
 
+import PIL.Image as ImageModule
 import gradio as gr
 import lightning.pytorch as pl
-import PIL.Image as ImageModule
 import torch
-from dataclass_wizard import YAMLWizard
+import yaml
 from PIL.Image import Image
-from ruamel import yaml
+from dataclass_wizard import YAMLWizard
 
 from configs.settings import COLORS, CONFIGS, MODELS, MODELS_APP
 

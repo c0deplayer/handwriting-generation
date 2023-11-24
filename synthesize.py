@@ -8,8 +8,8 @@ from typing import List, Union
 import numpy as np
 import torch
 import yaml
-from matplotlib import pyplot as plt
 from PIL.Image import Image
+from matplotlib import pyplot as plt
 
 from configs.settings import CONFIGS, MODELS
 
