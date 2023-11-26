@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
+import torchvision.transforms.v2 as transforms
 from torch import Tensor
-from torchvision import transforms, models
+from torchvision import models
 from torchvision.models import ConvNeXt_Tiny_Weights
-from torchvision.models.convnext import LayerNorm2d
 
 
 class ConvNeXt_M(nn.Module):
@@ -11,7 +11,7 @@ class ConvNeXt_M(nn.Module):
         super(ConvNeXt_M, self).__init__()
 
         self.num_class = num_class
-        self.transforms = transforms.Normalize(
+        self.normalize = transforms.Normalize(
             mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
         )
 
@@ -37,4 +37,4 @@ class ConvNeXt_M(nn.Module):
         )
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.convnext(self.transforms(x))
+        return self.convnext(self.normalize(x))

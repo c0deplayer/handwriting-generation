@@ -4,9 +4,14 @@ import torch
 import torch.nn as nn
 from einops import repeat
 from rich.progress import track
+from torch import Tensor
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 from torch.utils.data import DataLoader
+
+from data.utils import NormalizeInverse
+
+undo_normalize = NormalizeInverse((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 
 
 class EarlyStopper:
@@ -88,8 +93,8 @@ def train_loop(
             scheduler.step()
 
         print(
-            f"Epoch [{epoch + 1}/{num_epochs}] Loss: {train_loss:.4f}, Accuracy: {train_acc:.4f}, "
-            f"Val loss: {val_loss:.4f}, Val accuracy: {val_acc:.4f}"
+            f"Epoch [{epoch + 1}/{num_epochs}] Loss: {train_loss:.4f}, Accuracy: {train_acc * 100:.4f}, "
+            f"Val loss: {val_loss:.4f}, Val accuracy: {val_acc * 100:.4f}"
         )
 
         if early_stopper is not None:
@@ -125,20 +130,21 @@ def validation(
         with torch.inference_mode():
             writer_id, image, _ = batch
             if train_config["model"] == "diffusion":
-                image = repeat(image, "b c h w -> b (c repeat) h w", repeat=3)
+                image = repeat(image, "b 1 h w -> b 3 h w")
+            else:
+                image = undo_normalize(image)
 
             image = image.to(device)
             writer_id = writer_id.type(torch.LongTensor).to(device)
 
             outputs = model(image)
-            pred_writer_id = torch.argmax(outputs, dim=1)
             loss = criterion(outputs, writer_id)
 
             val_loss += loss.item()
-            val_acc += torch.sum(pred_writer_id == writer_id.data)
+            val_acc += compute_accuracy(outputs, writer_id)
 
-    val_loss /= train_config["val_dataset_len"]
-    val_acc = val_acc.double().to("cpu") / train_config["val_dataset_len"]
+    val_loss /= len(val_loader)
+    val_acc /= len(val_loader)
 
     return val_loss, val_acc
 
@@ -157,7 +163,9 @@ def train(
     for batch in track(train_loader):
         writer_id, image, _ = batch
         if train_config["model"] == "diffusion":
-            image = repeat(image, "b c h w -> b (c repeat) h w", repeat=3)
+            image = repeat(image, "b 1 h w -> b 3 h w")
+        else:
+            image = undo_normalize(image)
 
         image = image.to(device)
         writer_id = writer_id.type(torch.LongTensor).to(device)
@@ -165,16 +173,20 @@ def train(
         optimizer.zero_grad()
 
         outputs = model(image)
-        pred_writer_id = torch.argmax(outputs, dim=1)
         loss = criterion(outputs, writer_id)
 
         loss.backward()
         optimizer.step()
 
         train_loss += loss.item()
-        train_acc += torch.sum(pred_writer_id == writer_id.data)
+        train_acc += compute_accuracy(outputs, writer_id)
 
-    train_loss /= train_config["train_dataset_len"]
-    train_acc = train_acc.double() / train_config["train_dataset_len"]
+    train_loss /= len(train_loader)
+    train_acc /= len(train_loader)
 
     return train_loss, train_acc
+
+
+def compute_accuracy(predictions: Tensor, labels: Tensor) -> float:
+    classes = torch.argmax(predictions, dim=1)
+    return torch.mean((classes == labels).float()).item()

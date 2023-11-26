@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
+import torchvision.transforms.v2 as transforms
 from torch import Tensor
-from torchvision import transforms
-from torchvision.models import Inception_V3_Weights
+from torchvision.models import Inception_V3_Weights, inception_v3
 
 
 class InceptionV3_M(nn.Module):
@@ -10,13 +10,11 @@ class InceptionV3_M(nn.Module):
         super(InceptionV3_M, self).__init__()
 
         self.num_class = num_class
-        self.transforms = transforms.Normalize(
+        self.normalize = transforms.Normalize(
             mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
         )
 
-        self.inception = torch.hub.load(
-            "pytorch/vision:v0.10.0",
-            "inception_v3",
+        self.inception = inception_v3(
             weights=Inception_V3_Weights.DEFAULT,
         )
 
@@ -45,4 +43,4 @@ class InceptionV3_M(nn.Module):
         self.inception.fc = nn.Linear(288, self.num_class)
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.inception(self.transforms(x))
+        return self.inception(self.normalize(x))
