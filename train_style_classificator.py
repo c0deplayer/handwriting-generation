@@ -106,25 +106,20 @@ if __name__ == "__main__":
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
     train_loader = DataLoader(
         train_dataset,
-        batch_size=config.batch_size // 4,
+        batch_size=config.batch_size,
         shuffle=True,
         pin_memory=True,
         num_workers=os.cpu_count() // 4,
     )
     val_loader = DataLoader(
         val_dataset,
-        batch_size=config.batch_size // 4,
+        batch_size=config.batch_size,
         shuffle=False,
         pin_memory=True,
         num_workers=os.cpu_count() // 4,
     )
 
-    train_config = dict(
-        num_class=num_class,
-        model=args.config.lower(),
-        train_dataset_len=len(train_dataset),
-        val_dataset_len=len(val_dataset),
-    )
+    train_config = dict(num_class=num_class, model=args.config.lower())
 
     train_loop(
         model,

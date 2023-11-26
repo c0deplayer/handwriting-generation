@@ -33,3 +33,4 @@ DATASETS = {
 MODELS_APP = ["Diffusion", "LatentDiffusion"]
 COLORS = list(plt_colors.CSS4_COLORS.keys())
 CALCULATION_BASE_DIR = "./calc_data"
+GEN_DATASET_DIR = "./gen_data"
