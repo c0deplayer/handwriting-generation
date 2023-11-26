@@ -40,11 +40,11 @@ class StyleExtractor(nn.Module):
         x = image.clone().detach().to(self.device)
 
         x = x / 127.5 - 1
-        x = repeat(x, "1 1 h w -> 1 3 h w")
+        x = repeat(x, "b 1 h w -> b 3 h w")
 
         x = self.mobilenet_v2(x)
         x = self.pooling(x)
-        x = rearrange(x, "1 h 1 w -> w h")
+        x = rearrange(x, "b h 1 w -> b w h")
 
         return x.cpu()
 
