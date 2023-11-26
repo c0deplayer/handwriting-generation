@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Literal, Tuple, Union
 
 import lightning.pytorch as pl
 import torch
-import torchvision.transforms
+import torchvision.transforms.v2 as transforms
 from einops import rearrange
 from rich.progress import track
 from torch import Tensor
@@ -12,7 +12,6 @@ from torch.utils.data import DataLoader, Dataset
 
 from configs.config import ConfigDiffusion, ConfigLatentDiffusion, ConfigRNN
 from models.Diffusion.text_style import StyleExtractor
-
 from . import utils
 from .tokenizer import Tokenizer
 
@@ -240,6 +239,9 @@ class IAMonDataset(Dataset):
         self.max_text_len = max_text_len
         self.max_files = max_files
         self._diffusion = isinstance(config, ConfigDiffusion)
+        self.transforms = transforms.Compose(
+            [transforms.ToImage(), transforms.ToDtype(torch.float32, scale=True)]
+        )
 
         self.style_extractor = StyleExtractor(device=torch.device(config.device))
         self.tokenizer = Tokenizer(config.vocab)
@@ -319,12 +321,12 @@ class IAMonDataset(Dataset):
                 if strokes is None or image is None:
                     continue
 
-                writer_image = torchvision.transforms.PILToTensor()(image).to(
-                    torch.float32
-                )
+                writer_image = transforms.PILToTensor()(image).to(torch.float32)
                 writer_image = rearrange(writer_image, "1 h w -> 1 1 h w")
                 with torch.inference_mode():
-                    style = self.style_extractor(writer_image)
+                    style = rearrange(
+                        self.style_extractor(writer_image), "1 h w -> h w"
+                    )
 
                 dataset.append(
                     {
@@ -375,17 +377,18 @@ class IAMonDataset(Dataset):
 
     def __getitem__(self, index: int) -> Tuple[Tensor, ...]:
         if self._inception:
-            image = torchvision.transforms.ToTensor()(self.dataset[index]["image"])
+            image = self.transforms(self.dataset[index]["image"])
             w_index = str(self.dataset[index]["writer"])
 
             writer_id = torch.tensor(self.map_writer_id[w_index], dtype=torch.int32)
+            text = torch.tensor(self.dataset[index]["text"])
 
-            return writer_id, image, Tensor([0.0])
+            return writer_id, image, text
         elif self._diffusion:
             strokes = torch.tensor(self.dataset[index]["strokes"], dtype=torch.float32)
             text = torch.tensor(self.dataset[index]["text"])
             style = self.dataset[index]["style"]
-            image = torchvision.transforms.ToTensor()(self.dataset[index]["image"])
+            image = self.transforms(self.dataset[index]["image"])
 
             return strokes, text, style, image
         else:
@@ -451,10 +454,11 @@ class IAMDataset(Dataset):
         self._strict = strict
         self.max_text_len = max_text_len
         self.max_files = max_files
-        self.transforms = torchvision.transforms.Compose(
+        self.transforms = transforms.Compose(
             [
-                torchvision.transforms.ToTensor(),
-                torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                transforms.ToImage(),
+                transforms.ToDtype(torch.float32, scale=True),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
             ]
         )
         self.img_height = img_height

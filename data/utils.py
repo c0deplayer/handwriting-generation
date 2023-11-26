@@ -6,18 +6,18 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import PIL
 import h5py
 import numpy as np
-import PIL
 import torch
 import torch.nn.functional as F
-from numpy.linalg import norm
 from PIL import Image as ImageModule
 from PIL import ImageOps
 from PIL.Image import Image
+from numpy.linalg import norm
 from rich.progress import track
 from torch import Tensor
-from torchvision.transforms import Normalize
+from torchvision.transforms.v2 import Normalize
 
 from .tokenizer import Tokenizer
 
