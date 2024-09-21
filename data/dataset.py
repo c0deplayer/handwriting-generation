@@ -10,7 +10,7 @@ from rich.progress import track
 from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 
-from configs.config import ConfigDiffusion, ConfigLatentDiffusion, ConfigRNN
+from configs.config import ConfigDiffusion, ConfigLatentDiffusion
 from models.Diffusion.text_style import StyleExtractor
 from . import utils
 from .tokenizer import Tokenizer
@@ -24,18 +24,18 @@ class DataModule(pl.LightningDataModule):
 
     Args:
         dataset (Dataset): The dataset class to be used for loading data.
-        config (Union[ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion]): A configuration object specifying
+        config (Union[ConfigDiffusion, ConfigLatentDiffusion]): A configuration object specifying
             dataset parameters and other relevant settings.
 
     Raises:
         TypeError: If the `config` object is not an instance of `ConfigDiffusion`,
-                   `ConfigRNN`, or `ConfigLatentDiffusion`.
+                   or `ConfigLatentDiffusion`.
 
     Attributes:
         train_dataset (DataLoader): The training dataset, initially set to None.
         val_dataset (DataLoader): The validation dataset, initially set to None.
         dataset (Dataset): The dataset class used for loading data.
-        __config (Union[ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion]):
+        __config (Union[ConfigDiffusion, ConfigLatentDiffusion]):
                 The configuration object specifying dataset parameters and settings.
         batch_size (int): The batch size used for data loading.
         max_text_len (int): The maximum length of text data.
@@ -60,13 +60,13 @@ class DataModule(pl.LightningDataModule):
     def __init__(
         self,
         dataset: Dataset,
-        config: Union[ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion],
+        config: Union[ConfigDiffusion, ConfigLatentDiffusion],
     ) -> None:
         super().__init__()
 
-        if not isinstance(config, (ConfigDiffusion, ConfigRNN, ConfigLatentDiffusion)):
+        if not isinstance(config, (ConfigDiffusion, ConfigLatentDiffusion)):
             raise TypeError(
-                "Expected config to be ConfigDiffusion, ConfigRNN, or ConfigLatentDiffusion, "
+                "Expected config to be ConfigDiffusion, or ConfigLatentDiffusion, "
                 f"got {type(config).__name__}"
             )
 
@@ -96,7 +96,7 @@ class DataModule(pl.LightningDataModule):
                 max_files=self.train_size * self.max_files,
                 dataset_type="train",
             )
-            if isinstance(self.__config, (ConfigDiffusion, ConfigRNN)):
+            if isinstance(self.__config, ConfigDiffusion):
                 kwargs_dataset["max_seq_len"] = self.max_seq_len
 
             self.train_dataset = self.dataset(**kwargs_dataset)
@@ -178,7 +178,7 @@ class IAMonDataset(Dataset):
         max_text_len (int): The maximum allowable length of text data.
         max_seq_len (int): The maximum sequence length (if applicable).
         max_files (int): The maximum number of data files to load.
-        config (Union[ConfigDiffusion, ConfigRNN]): A configuration object specifying dataset parameters and settings.
+        config (ConfigDiffusion): A configuration object specifying dataset parameters and settings.
         dataset_type (Literal["train", "val", "test"]): The type of dataset to load ("train," "val," or "test").
         strict (bool, optional): Whether to enforce strict vocabulary constraints (default: False).
 
@@ -207,7 +207,7 @@ class IAMonDataset(Dataset):
             Get the length of the dataset.
 
     Properties:
-        config (Union[ConfigDiffusion, ConfigRNN]): The configuration object.
+        config (ConfigDiffusion): The configuration object.
         dataset (List[Dict[str, Any]]): The loaded dataset.
     """
 
@@ -218,7 +218,7 @@ class IAMonDataset(Dataset):
         max_text_len: int,
         max_seq_len: int,
         max_files: int,
-        config: Union[ConfigDiffusion, ConfigRNN],
+        config: ConfigDiffusion,
         dataset_type: Literal["train", "val", "test"],
         *,
         strict: bool = False,
@@ -350,7 +350,7 @@ class IAMonDataset(Dataset):
         return dataset, map_writer_id
 
     @property
-    def config(self) -> Union[ConfigDiffusion, ConfigRNN]:
+    def config(self) -> ConfigDiffusion:
         return self.__config
 
     @property

@@ -193,3 +193,4 @@ images/
 .sync.ffs_db
 auto_fs_*
 gen_data/*
+.DS_Store

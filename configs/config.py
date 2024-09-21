@@ -75,30 +75,3 @@ class ConfigDiffusion(BaseConfig):
         ),
     )
 
-
-@dataclass
-class ConfigRNN(BaseConfig):
-    max_seq_len: int
-
-    input_size: int
-    hidden_size: int
-    num_window: int
-    num_mixture: int
-    lstm_clip: float
-    mdn_clip: float
-    bias: float
-
-    dataset_txt: str
-
-    blacklist: Tuple[str, ...] = field(
-        default=(
-            "z00-001",
-            "a08-551z",
-            "z01-000",
-            "z01-000z",
-            "z01-010a",
-            "z01-010",
-            "z01-010b",
-            "z01-010c",
-        ),
-    )

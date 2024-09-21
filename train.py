@@ -29,7 +29,7 @@ def cli_main():
         "-c",
         "--config",
         help="Type of model",
-        choices=["RNN", "Diffusion", "LatentDiffusion"],
+        choices=["Diffusion", "LatentDiffusion"],
         type=str,
         required=True,
     )
@@ -108,17 +108,6 @@ def train_model():
         )
 
         del trainer_params["max_epochs"]
-
-    elif args.config == "RNN":
-        model_params = dict(
-            input_size=config.input_size,
-            hidden_size=config.hidden_size,
-            num_window=config.num_window,
-            num_mixture=config.num_mixture,
-            vocab_size=config.vocab_size,
-            bias=config.bias,
-            clip_grads=(config.lstm_clip, config.mdn_clip),
-        )
 
     else:
         with open("data/json_writer_ids/train_writer_ids.json", mode="r") as fp:
@@ -203,9 +192,6 @@ def train_model():
 if __name__ == "__main__":
     args = cli_main()
     dataset = None
-
-    if sys.version_info < (3, 8):
-        raise SystemExit("Only Python 3.8 and above is supported")
 
     config_file = f"configs/{args.config}/{args.config_file}"
 
