@@ -1,15 +1,7 @@
-blacklist: !!python/tuple
-  - z00-001
-  - z01-000
-  - z01-000z
-  - z01-010a
-  - z01-010
-  - z01-010b
-  - z01-010c
-device: "cuda"
-checkpoint_path: "/home/codeplayer/Studia/Inżynierka/handwriting-generation/model_checkpoints/Diffusion"
-data_path: "/home/codeplayer/Studia/Inżynierka/handwriting-generation/raw_data/IAMonDB"
-dataset_txt: "/home/codeplayer/Studia/Inżynierka/handwriting-generation/raw_data/IAMonDB/dataset.txt"
+blacklist: [z00-001, z01-000, z01-000z, 01-010a, z01-010, z01-010b, z01-010c]
+checkpoint_path: "./model_checkpoints/Diffusion"
+data_path: "./raw_data/IAMonDB"
+dataset_txt: "./raw_data/IAMonDB/dataset.txt"
 
 batch_size: 96
 img_height: 90

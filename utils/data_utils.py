@@ -1,30 +1,28 @@
+import contextlib
 import json
-import os
 import warnings
 import xml.etree.ElementTree as ET
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional, Union
 
-import PIL
 import h5py
 import numpy as np
 import torch
 import torch.nn.functional as F
-from PIL import Image as ImageModule
-from PIL import ImageOps
-from PIL.Image import Image
 from numpy.linalg import norm
+from PIL import Image as ImageModule
+from PIL import ImageOps, UnidentifiedImageError
 from rich.progress import track
 from torch import Tensor
 from torchvision.transforms.v2 import Normalize
 
-from .tokenizer import Tokenizer
+from data.tokenizer import Tokenizer
 
 
-def get_transcription(path: Path) -> Dict[str, str]:
+def get_transcription(path: Path) -> dict[str, str]:
     """
-    This function reads transcription data from a file specified by the provided path. The file is expected
+    Reads transcription data from a file specified by the provided path. The file is expected
     to contain text data with specific formatting, where each line represents a transcription entry.
 
     Args:
@@ -33,6 +31,9 @@ def get_transcription(path: Path) -> Dict[str, str]:
     Returns:
         Dict[str, str]: A dictionary where keys are composed of the filename stem and a numerical index,
         and values are the transcribed text for each entry.
+
+    Raises:
+        ValueError: If the CSR token is not found in the file.
 
     Example:
         If the file contains the following lines:
@@ -51,23 +52,26 @@ def get_transcription(path: Path) -> Dict[str, str]:
             'filename-03': 'Line 3'
         }
         ```
-
     """
+    with path.open(mode="r") as file:
+        transcription_lines = file.readlines()
 
-    with path.open(mode="r") as f:
-        transcription = f.readlines()
+    transcription_lines = list(filter(None, map(str.rstrip, transcription_lines)))
 
-    result = map(str.rstrip, transcription)
-    transcription = list(filter(None, list(result)))
-    start_index = transcription.index("CSR:") + 1
-    lines = transcription[start_index:]
+    try:
+        start_index = transcription_lines.index("CSR:") + 1
+    except ValueError:
+        raise ValueError("'CSR:' not found in the file.")
+
+    transcription_entries = transcription_lines[start_index:]
 
     return {
-        f"{path.stem}-{str(z).zfill(2)}": line for z, line in enumerate(lines, start=1)
+        f"{path.stem}-{str(index).zfill(2)}": line
+        for index, line in enumerate(transcription_entries, start=1)
     }
 
 
-def get_line_strokes(path: Path, max_length: int) -> Optional[np.array]:
+def get_line_strokes(path: Path, max_length: int) -> Optional[np.ndarray]:
     """
     Get line strokes from an XML file.
 
@@ -76,10 +80,9 @@ def get_line_strokes(path: Path, max_length: int) -> Optional[np.array]:
         max_length (int): Maximum length of the stroke sequence.
 
     Returns:
-        Optional[np.array]: An array containing line strokes if successful, or None if the maximum value of the stroke
+        Optional[np.ndarray]: An array containing line strokes if successful, or None if the maximum value of the stroke
         coordinates exceeds 15.
     """
-
     try:
         root = ET.parse(path).getroot()
     except ET.ParseError as e:
@@ -89,6 +92,34 @@ def get_line_strokes(path: Path, max_length: int) -> Optional[np.array]:
     if stroke_set_tag is None:
         raise ValueError("No StrokeSet element found in XML file")
 
+    strokes_cord = extract_strokes(stroke_set_tag)
+
+    strokes = np.array(strokes_cord)
+    strokes = strokes[np.argsort(strokes[:, 3])][:, :3]
+
+    # Normalize strokes
+    strokes[:, :2] /= np.std(strokes[:, :2])
+
+    # Combine strokes
+    for _ in range(3):
+        strokes = __combine_strokes(strokes, int(len(strokes) * 0.20))
+
+    if np.amax(np.abs(strokes)) > 15:
+        return None
+
+    return __pad_strokes(strokes, max_length)
+
+
+def extract_strokes(stroke_set_tag: ET.Element) -> list:
+    """
+    Extract strokes from the StrokeSet XML element.
+
+    Args:
+        stroke_set_tag (ET.Element): The StrokeSet XML element.
+
+    Returns:
+        list: A list of stroke coordinates.
+    """
     strokes_cord = []
     prev_cord = None
 
@@ -111,21 +142,7 @@ def get_line_strokes(path: Path, max_length: int) -> Optional[np.array]:
         else:
             strokes_cord.append([prev_cord[0], prev_cord[1], 1.0, time])
 
-    strokes = np.array(strokes_cord)
-    strokes = strokes[np.argsort(strokes[:, 3])][:, :3]
-
-    # if diffusion:
-    strokes[:, :2] /= np.std(strokes[:, :2])
-
-    for _ in range(3):
-        strokes = __combine_strokes(strokes, int(len(strokes) * 0.20))
-
-    if np.amax(np.abs(strokes)) > 15:
-        return None
-    # else:
-    #     strokes = np.insert(strokes, 0, [0, 0, 0.0], axis=0)
-
-    return __pad_strokes(strokes, max_length)
+    return strokes_cord
 
 
 def __combine_strokes(strokes: np.ndarray, n: int) -> np.ndarray:
@@ -146,32 +163,31 @@ def __combine_strokes(strokes: np.ndarray, n: int) -> np.ndarray:
 
     Note:
         This function modifies the input strokes array in place.
-
     """
-
-    s, s_neighbors = strokes[::2, :2], strokes[1::2, :2]
-
     if len(strokes) % 2:
         warnings.warn(
             "The number of strokes is odd, so the last stroke will be ignored.",
             UserWarning,
         )
-        s = s[:-1]
+        strokes = strokes[:-1]
+
+    s, s_neighbors = strokes[::2, :2], strokes[1::2, :2]
 
     values = (
         norm(s, axis=-1) + norm(s_neighbors, axis=-1) - norm(s + s_neighbors, axis=-1)
     )
     indices = np.argsort(values)[:n]
 
-    strokes[indices * 2] += strokes[indices * 2 + 1]
-    strokes[indices * 2, 2] = np.greater(strokes[indices * 2, 2], 0)
-    strokes = np.delete(strokes, indices * 2 + 1, axis=0)
-    strokes[:, :2] /= np.std(strokes[:, :2])
+    combined_strokes = strokes.copy()
+    combined_strokes[indices * 2] += combined_strokes[indices * 2 + 1]
+    combined_strokes[indices * 2, 2] = np.greater(combined_strokes[indices * 2, 2], 0)
+    combined_strokes = np.delete(combined_strokes, indices * 2 + 1, axis=0)
+    combined_strokes[:, :2] /= np.std(combined_strokes[:, :2])
 
-    if not strokes[-1, 2]:
-        strokes[-1, 2] = 1.0
+    if not combined_strokes[-1, 2]:
+        combined_strokes[-1, 2] = 1.0
 
-    return strokes
+    return combined_strokes
 
 
 def get_image(
@@ -180,11 +196,11 @@ def get_image(
     height: int,
     *,
     latent: bool = False,
-    centering: Tuple[float, float] = (0.0, 0.0),
-) -> Union[Image, None]:
+    centering: tuple[float, float] = (0.5, 0.5),
+) -> Union[ImageModule.Image, None]:
     """
-    This function loads an image from the specified file path and applies preprocessing based on the provided parameters.
-    It can convert the image to grayscale (L mode) or RGB mode based on the 'latent' parameter and crop/resize the image
+    Load an image from the specified file path and apply preprocessing based on the provided parameters.
+    The image can be converted to grayscale (L mode) or RGB mode based on the 'latent' parameter and cropped/resized
     to the specified dimensions.
 
     Args:
@@ -193,11 +209,11 @@ def get_image(
         height (int): The desired height of the output image.
         latent (bool, optional): If True, converts the image to RGB mode; otherwise, to grayscale (L mode).
                                  Defaults to False.
-        centering (Tuple[float, float], optional): The centering position for resizing. Defaults to (0.0, 0.0).
+        centering (tuple[float, float], optional): The centering position for resizing. Defaults to (0.5, 0.5).
 
     Returns:
-        Union[Image, None]: The loaded and preprocessed image as a PIL Image object,
-                            or None if the image cannot be loaded.
+        Union[ImageModule.Image, None]: The loaded and preprocessed image as a PIL Image object,
+                                        or None if the image cannot be loaded.
 
     Raises:
         FileNotFoundError: If the image file is not found at the specified path.
@@ -205,35 +221,34 @@ def get_image(
     Example:
         - To load and resize an RGB image:
         ```python
-        image = get_image('path/to/image.jpg', width=200, height=150, latent=True)
+        image = get_image(Path('path/to/image.jpg'), width=200, height=150, latent=True)
         ```
 
         - To load and resize a grayscale image:
         ```python
-        image = get_image('path/to/image.png', width=100, height=100)
+        image = get_image(Path('path/to/image.png'), width=100, height=100)
         ```
-
     """
-
     try:
         img = ImageModule.open(path)
-    except PIL.UnidentifiedImageError:
+    except UnidentifiedImageError:
         return None
     except FileNotFoundError as e:
-        raise f"The image was not found: {path}" from e
+        raise FileNotFoundError(f"The image was not found: {path}") from e
 
     if latent:
         img = img.convert("RGB")
     else:
         img = img.convert("L")
-
         bbox = ImageOps.invert(img).getbbox()
-        img = img.crop(bbox)
+
+        if bbox:
+            img = img.crop(bbox)
 
     return ImageOps.pad(
         image=img,
-        method=ImageModule.LANCZOS,
         size=(width, height),
+        method=ImageModule.LANCZOS,
         color="white",
         centering=centering,
     )
@@ -241,7 +256,7 @@ def get_image(
 
 def get_encoded_text_with_one_hot_encoding(
     text: str, tokenizer: Tokenizer, max_len: int, *, pad_value: int = 0
-) -> Tuple[np.array, np.array]:
+) -> tuple[np.ndarray, np.ndarray]:
     """
     This function encodes the input text using a provided tokenizer and converts it into one-hot encoding.
     It also ensures that the resulting encoding has a maximum length specified by 'max_len' by padding with
@@ -254,7 +269,7 @@ def get_encoded_text_with_one_hot_encoding(
         pad_value (int, optional): The padding value to use when extending the encoding. Defaults to 0.
 
     Returns:
-        Tuple[np.array, np.array]: A tuple containing the one-hot encoded text and the text encoding.
+        tuple[np.ndarray, np.ndarray]: A tuple containing the one-hot encoded text and the text encoding.
 
     Example:
         ```python
@@ -266,48 +281,43 @@ def get_encoded_text_with_one_hot_encoding(
         ```
 
     """
+    encoded_text = tokenizer.encode(text)
 
-    text = tokenizer.encode(text)
-
-    text_len = len(text)
+    text_len = len(encoded_text)
     max_len += 2
 
     if text_len < max_len:
         padded_text = np.full((max_len - text_len,), pad_value)
-        text = np.concatenate((text, padded_text))
+        encoded_text = np.concatenate((encoded_text, padded_text))
 
-    labels = torch.as_tensor(text)
+    labels = torch.as_tensor(encoded_text, dtype=torch.long)
     one_hot = F.one_hot(labels, num_classes=tokenizer.get_vocab_size())
 
-    return one_hot.numpy(), text
+    return one_hot.numpy(), encoded_text
 
 
 def __pad_strokes(
-    strokes: np.array, max_length: int, *, fill_value: float = 0
-) -> Optional[np.array]:
+    strokes: np.ndarray, max_length: int, *, fill_value: float = 0
+) -> Optional[np.ndarray]:
     """
-    This function takes a stroke array and either pads it with a specified fill value.
+    Pads a stroke array to a specified maximum length with a given fill value.
 
     Args:
-        strokes (np.array): The input stroke array to be padded..
+        strokes (np.ndarray): The input stroke array to be padded.
         max_length (int): The desired maximum length for the stroke array.
         fill_value (float, optional): The value to use for padding when extending the array. Defaults to 0.
 
     Returns:
-        Optional[np.array]: The padded stroke array, or None if the input length exceeds the maximum length.
+        Optional[np.ndarray]: The padded stroke array, or None if the input length exceeds the maximum length.
     """
+    stroke_len = len(strokes)
 
-    if max_length:
-        stroke_len = len(strokes)
+    if stroke_len > max_length:
+        return None
 
-        if stroke_len > max_length:
-            return None
-
-        padded_strokes = np.full((max_length, 3), fill_value, dtype=np.float32)
-        padded_strokes[:, 2] = 1.0
-        padded_strokes[:stroke_len, :] = strokes[:, :]
-    else:
-        padded_strokes = strokes
+    padded_strokes = np.full((max_length, 3), fill_value, dtype=np.float32)
+    padded_strokes[:, 2] = 1.0
+    padded_strokes[:stroke_len, :] = strokes[:, :]
 
     return padded_strokes
 
@@ -326,24 +336,26 @@ def get_writer_id(path: Path, idx: str) -> int:
         int: The writer ID associated with the specified data entry, or 0 if not found.
 
     Example:
-        ```
+        ```python
         path_to_xml_dir = Path('path/to/xml_files')
         data_entry_id = '12345'
         writer_id = get_writer_id(path_to_xml_dir, data_entry_id)
         ```
     """
-
     writer_id = 0
 
     for file in path.glob("*.xml"):
-        root = ET.parse(file).getroot()
+        try:
+            tree = ET.parse(file)
+            root = tree.getroot()
+        except ET.ParseError:
+            continue
 
         general_tag = root.find("General")
         if general_tag is None:
             continue
 
-        form_id = general_tag[0].attrib.get("id", None)
-
+        form_id = general_tag[0].attrib.get("id")
         if form_id is None or form_id != idx:
             continue
 
@@ -365,15 +377,17 @@ def get_max_seq_len(strokes_path: Path) -> int:
     Returns:
         int: The maximum sequence length of stroke data among all XML files.
     """
-
     max_length = 0
-    xml_file = tuple(strokes_path.rglob("*.xml"))
+    xml_files = tuple(strokes_path.rglob("*.xml"))
 
-    for path_xml_file in track(
-        xml_file, description="Calculating max sequence length..."
-    ):
-        strokes = get_line_strokes(path_xml_file, 0)
-        max_length = max(max_length, len(strokes))
+    if not xml_files:
+        print("No XML files found in the specified directory.")
+        return max_length
+
+    for xml_file in track(xml_files, description="Calculating max sequence length..."):
+        strokes = get_line_strokes(xml_file, 0)
+        if strokes is not None:
+            max_length = max(max_length, len(strokes))
 
     print(f"Max sequence length is {max_length}")
     return max_length
@@ -407,40 +421,40 @@ def get_max_seq_len(strokes_path: Path) -> int:
 #     return std
 
 
-def load_dataset(
-    path: Tuple[Path, Optional[Path]], max_files: int, *, latent: bool = False
-) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, int]]]:
+def load_json_file(json_path: Optional[Path]) -> Optional[dict[str, int]]:
     """
-    This function loads a dataset from an H5 file and, optionally, a JSON file containing writer ID mappings.
-    It retrieves and organizes data into a list of dictionaries and returns it. The 'latent' parameter controls
-    the type of data loading (latent or non-latent).
+    Load a JSON file containing writer ID mappings.
 
     Args:
-        path (Tuple[Path, Optional[Path]]): A tuple containing the path to the H5 file and, optionally,
-                                            the path to a JSON file.
-        max_files (int): The maximum number of files to load from the dataset.
+        json_path (Optional[Path]): The path to the JSON file.
 
     Returns:
-        Tuple[List[Dict[str, Any], Optional[Dict[str, int]]]: A tuple containing a list of dictionaries
-                                        representing the loaded data and, if latent, a dictionary mapping writer IDs.
-
-    Example:
-        ```
-        h5_file_path = Path('path/to/dataset.h5')
-        json_file_path = Path('path/to/writer_ids.json')
-        max_files_to_load = 100
-        latent_data = True
-        dataset, writer_id_mapping = load_dataset((h5_file_path, json_file_path), max_files_to_load, latent=latent_data)
-        ```
+        Optional[dict[str, int]]: A dictionary mapping writer IDs if the JSON file is provided, otherwise None.
     """
+    if json_path is None:
+        return None
 
-    map_writer_id = None
-    with open(path[1], mode="r") as fp:
-        map_writer_id = json.load(fp)
+    with open(json_path, mode="r") as fp:
+        return json.load(fp)
 
-    with h5py.File(path[0], mode="r") as f:
-        dataset = []
 
+def load_h5_dataset(
+    h5_path: Path, max_files: int, latent: bool
+) -> list[dict[str, Any]]:
+    """
+    Load a dataset from an H5 file.
+
+    Args:
+        h5_path (Path): The path to the H5 file.
+        max_files (int): The maximum number of files to load from the dataset.
+        latent (bool): Whether to load latent data or not.
+
+    Returns:
+        list[dict[str, Any]]: A list of dictionaries representing the loaded data.
+    """
+    dataset = []
+
+    with h5py.File(h5_path, mode="r") as f:
         for group_name in track(
             f["dataset_group"], description="Loading dataset from H5 file..."
         ):
@@ -453,7 +467,6 @@ def load_dataset(
                     "image": torch.tensor(np.array(group["image"])),
                     "label": np.array(group["label"]),
                 }
-
             else:
                 data_dict = {
                     "writer": writer_id,
@@ -469,32 +482,109 @@ def load_dataset(
             dataset.append(data_dict)
 
             if max_files and len(dataset) >= max_files:
-                return dataset, map_writer_id
+                break
 
-        return dataset, map_writer_id
+    return dataset
+
+
+def load_dataset(
+    path: tuple[Path, Optional[Path]], max_files: int, *, latent: bool = False
+) -> tuple[list[dict[str, Any]], Optional[dict[str, int]]]:
+    """
+    Load a dataset from an H5 file and, optionally, a JSON file containing writer ID mappings.
+
+    Args:
+        path (Tuple[Path, Optional[Path]]): A tuple containing the path to the H5 file and, optionally,
+                                            the path to a JSON file.
+        max_files (int): The maximum number of files to load from the dataset.
+        latent (bool): Whether to load latent data or not.
+
+    Returns:
+        tuple[list[dict[str, Any]], Optional[dict[str, int]]]: A tuple containing a list of dictionaries
+                                                               representing the loaded data and, if latent,
+                                                               a dictionary mapping writer IDs.
+
+    Example:
+        ```python
+        h5_file_path = Path('path/to/dataset.h5')
+        json_file_path = Path('path/to/writer_ids.json')
+        max_files_to_load = 100
+        latent_data = True
+        dataset, writer_id_mapping = load_dataset((h5_file_path, json_file_path), max_files_to_load, latent=latent_data)
+        ```
+    """
+    h5_path, json_path = path
+    map_writer_id = load_json_file(json_path)
+    dataset = load_h5_dataset(h5_path, max_files, latent)
+
+    return dataset, map_writer_id
+
+
+def save_json_file(json_path: Optional[Path], map_writer_ids: dict[str, int]) -> None:
+    """
+    Save writer ID mappings to a JSON file.
+
+    Args:
+        json_path (Optional[Path]): The path to the JSON file.
+        map_writer_ids (dict[str, int]): A dictionary mapping writer IDs to be saved in a JSON file.
+    """
+    if json_path is not None:
+        with open(json_path, mode="w") as fp:
+            json.dump(map_writer_ids, fp, indent=4)
+
+
+def save_h5_dataset(
+    h5_path: Path, dataset: list[dict[str, Any]], is_latent: bool
+) -> None:
+    """
+    Save a dataset to an H5 file.
+
+    Args:
+        h5_path (Path): The path to the H5 file.
+        dataset (list[dict[str, Any]]): A list of dictionaries representing the dataset to be saved.
+        is_latent (bool): If True, save latent data; otherwise, save non-latent data.
+    """
+    with h5py.File(h5_path, mode="w") as f:
+        dataset_h5 = f.create_group("dataset_group")
+
+        for i, data_dict in track(
+            enumerate(dataset), description="[cyan]Saving dataset..."
+        ):
+            writer_id = data_dict["writer"]
+            group = dataset_h5.create_group(f"dataset_{i}")
+            group.attrs["writer"] = writer_id
+
+            if is_latent:
+                image_data = data_dict["image"].numpy()
+                group.create_dataset("image", data=image_data)
+                group.create_dataset("label", data=data_dict["label"])
+            else:
+                group.attrs["file"] = data_dict["file"]
+                group.attrs["raw_text"] = data_dict["raw_text"]
+                group.create_dataset("strokes", data=data_dict["strokes"])
+                group.create_dataset("text", data=data_dict["text"])
+                group.create_dataset("one_hot", data=data_dict["one_hot"])
+                image_data = np.array(data_dict["image"])
+                group.create_dataset("image", data=image_data)
+                group.create_dataset("style", data=data_dict["style"].numpy())
 
 
 def save_dataset(
-    dataset: List[Dict[str, Any]],
-    path: Tuple[Path, Optional[Path]],
+    dataset: list[dict[str, Any]],
+    path: tuple[Path, Optional[Path]],
     *,
     is_latent: bool = False,
-    map_writer_ids: Dict[str, int],
+    map_writer_ids: dict[str, int],
 ) -> None:
     """
-    This function saves a dataset to an H5 file and, optionally, a JSON file containing writer ID mappings.
-    The 'is_latent' parameter controls the type of data being saved (latent or non-latent).
+    Save a dataset to an H5 file and, optionally, a JSON file containing writer ID mappings.
 
     Args:
-        dataset (List[Dict[str, Any]]): A list of dictionaries representing the dataset to be saved.
-        path (Tuple[Path, Optional[Path]]): A tuple containing the path to the H5 file and, optionally,
+        dataset (list[dict[str, Any]]): A list of dictionaries representing the dataset to be saved.
+        path (tuple[Path, Optional[Path]]): A tuple containing the path to the H5 file and, optionally,
                                             the path to a JSON file.
         is_latent (bool, optional): If True, save latent data; otherwise, save non-latent data. Defaults to False.
-        map_writer_ids (Optional[Dict[str, int]], optional): A dictionary mapping writer IDs to be saved in a JSON file.
-                                                             Defaults to None.
-
-    Returns:
-        None
+        map_writer_ids (dict[str, int]): A dictionary mapping writer IDs to be saved in a JSON file.
 
     Example:
         ```python
@@ -506,34 +596,9 @@ def save_dataset(
         save_dataset(dataset_to_save, (h5_file_path, json_file_path), is_latent=is_data_latent, map_writer_ids=writer_id_mapping)
         ```
     """
-
-    with open(path[1], mode="w") as fp:
-        json.dump(map_writer_ids, fp, indent=4)
-
-    with h5py.File(path[0], mode="w") as f:
-        dataset_h5 = f.create_group("dataset_group")
-
-        for i, data_dict in track(enumerate(dataset), description="Saving dataset..."):
-            writer_id = data_dict["writer"]
-            group = dataset_h5.create_group(f"dataset_{i}")
-            group.attrs["writer"] = writer_id
-
-            if is_latent:
-                image_data = data_dict["image"].numpy()
-                group.create_dataset("image", data=image_data)
-                group.create_dataset("label", data=data_dict["label"])
-
-            else:
-                group.attrs["file"] = data_dict["file"]
-                group.attrs["raw_text"] = data_dict["raw_text"]
-
-                group.create_dataset("strokes", data=data_dict["strokes"])
-                group.create_dataset("text", data=data_dict["text"])
-                group.create_dataset("one_hot", data=data_dict["one_hot"])
-
-                image_data = np.array(data_dict["image"])
-                group.create_dataset("image", data=image_data)
-                group.create_dataset("style", data=data_dict["style"].numpy())
+    h5_path, json_path = path
+    save_json_file(json_path, map_writer_ids)
+    save_h5_dataset(h5_path, dataset, is_latent)
 
 
 def uniquify(path: Path) -> Path:
@@ -548,20 +613,30 @@ def uniquify(path: Path) -> Path:
         Path: A unique path that does not clash with existing files.
 
     Example:
-        ```
+        ```python
         original_path = Path('path/to/file.txt')
         unique_path = uniquify(original_path)
         ```
     """
-
-    filename, extension = os.path.splitext(path)
+    original_path = path
     counter = 1
 
-    while os.path.exists(path):
-        path = f"{filename}({str(counter)}){extension}"
+    while path.exists():
+        path = original_path.with_stem(f"{original_path.stem}({counter})")
         counter += 1
 
-    return Path(path)
+    return path
+
+
+def remove_existing_files(file_paths: list[Path]) -> None:
+    """Remove existing files if they exist.
+
+    Args:
+        file_paths (list[Path]): List of file paths to be removed.
+    """
+    for file_path in file_paths:
+        with contextlib.suppress(FileNotFoundError):
+            file_path.unlink()
 
 
 class NormalizeInverse(Normalize):
@@ -575,7 +650,7 @@ class NormalizeInverse(Normalize):
         std (Sequence): The standard deviation values used for the original normalization.
 
     Example:
-        ```
+        ```python
         mean_values = [0.485, 0.456, 0.406]
         std_values = [0.229, 0.224, 0.225]
         normalize_transform = Normalize(mean=mean_values, std=std_values)
@@ -589,14 +664,31 @@ class NormalizeInverse(Normalize):
         ```
     """
 
-    def __init__(self, mean: Sequence, std: Sequence) -> None:
-        mean = torch.as_tensor(mean)
-        std = torch.as_tensor(std)
+    def __init__(self, mean: Sequence[float], std: Sequence[float]) -> None:
+        """
+        Initialize the NormalizeInverse transform with the mean and standard deviation values.
 
-        std_inv = 1 / (std + 1e-7)
-        mean_inv = -mean * std_inv
+        Args:
+            mean (Sequence[float]): The mean values used for the original normalization.
+            std (Sequence[float]): The standard deviation values used for the original normalization.
+        """
+        mean_tensor = torch.as_tensor(mean)
+        std_tensor = torch.as_tensor(std)
+
+        # Calculate the inverse standard deviation and mean
+        std_inv = 1 / (std_tensor + 1e-7)
+        mean_inv = -mean_tensor * std_inv
 
         super().__init__(mean_inv, std_inv, inplace=True)
 
     def __call__(self, tensor: Tensor) -> Tensor:
+        """
+        Apply the inverse normalization to the given tensor.
+
+        Args:
+            tensor (Tensor): The normalized image tensor to be reverted.
+
+        Returns:
+            Tensor: The original image tensor after applying the inverse normalization.
+        """
         return super().__call__(tensor.clone())

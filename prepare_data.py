@@ -1,36 +1,33 @@
-import contextlib
 import os
-import sys
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
+from multiprocessing import Pool
 from pathlib import Path
+from typing import Any
 
-import yaml
+from configs.config import BaseConfig, ConfigDiffusion, ConfigLatentDiffusion
+from configs.constants import DATASETS
+from utils import data_utils
+from utils.utils import load_config
 
-from configs.config import ConfigLatentDiffusion
-from configs.settings import CONFIGS, DATASETS
-from data import utils
 
-
-def cli_main():
-    """
-    Command-line interface for initializing and parsing arguments.
+def cli_main() -> Namespace:
+    """Command-line interface for initializing and parsing arguments.
 
     Returns:
         Namespace: A namespace object containing parsed arguments.
     """
-
     parser = ArgumentParser()
     parser.add_argument(
-        "-c",
-        "--config",
+        "-m",
+        "--model",
         help="Type of model",
-        choices=["RNN", "Diffusion", "LatentDiffusion"],
+        choices=["Diffusion", "LatentDiffusion"],
         type=str,
         required=True,
     )
     parser.add_argument(
-        "-cf",
-        "--config-file",
+        "-c",
+        "--config",
         help="Filename for configs",
         type=str,
         default="base_gpu.yaml",
@@ -39,83 +36,139 @@ def cli_main():
     return parser.parse_args()
 
 
-def prepare_data():
-    """
-    Prepares and saves datasets for training and validation based on the specified model configurations.
+def __parallel_save_dataset(args: tuple) -> None:
+    """Parallel function to save dataset.
 
-    The function identifies the model type, splits the dataset into training and validation sets,
-    and saves them in HDF5 and JSON formats as required. It handles different configurations
-    for models like LatentDiffusion, RNN, and Diffusion.
+    Args:
+        args (tuple): Arguments for the save_dataset function.
+    """
+    dataset, file_paths, is_latent, map_writer_ids = args
+    data_utils.save_dataset(
+        dataset, file_paths, is_latent=is_latent, map_writer_ids=map_writer_ids
+    )
+
+
+def __create_dataset(args: tuple) -> Any:
+    """Create a dataset based on the provided arguments.
+
+    Args:
+        args (tuple): Arguments for creating the dataset.
+
+    Returns:
+        Any: The created dataset.
+    """
+    dataset_class, kwargs = args
+
+    return DATASETS[dataset_class](**kwargs)
+
+
+def prepare_data(config: BaseConfig, args: Namespace) -> None:
+    """Prepares and saves datasets for training and validation based on the specified model configurations.
+
+    Args:
+        config (BaseConfig): The loaded configuration object.
+        args (Namespace): Parsed command-line arguments.
 
     Raises:
         FileNotFoundError: If specified dataset files do not exist and cannot be removed.
     """
-
-    is_latent = isinstance(config, ConfigLatentDiffusion)
     train_size = config.get("train_size", 0.8)
     val_size = 1.0 - train_size
-    kwargs_dataset = dict(
-        config=config,
-        img_height=config.get("img_height", 90),
-        img_width=config.get("img_width", 1400),
-        max_text_len=config.max_text_len,
-        max_files=train_size * config.max_files,
-        dataset_type="train",
+
+    kwargs_dataset = {
+        "config": config,
+        "img_height": config.get("img_height", 90),
+        "img_width": config.get("img_width", 1400),
+        "max_text_len": config.max_text_len,
+        "max_files": train_size * config.max_files,
+        "use_gpu": True,
+        "dataset_type": "train",
+    }
+
+    Path("./data/h5_dataset").mkdir(parents=True, exist_ok=True)
+
+    h5_file_path_train, h5_file_path_val, json_file_path_train, json_file_path_val = (
+        __get_file_paths(args.model)
     )
+
+    if isinstance(config, ConfigDiffusion):
+        kwargs_dataset |= {"max_seq_len": config.max_seq_len}
+
+    data_utils.remove_existing_files([
+        h5_file_path_train,
+        h5_file_path_val,
+        json_file_path_train,
+        json_file_path_val,
+    ])
+
+    tasks = [
+        (args.model, kwargs_dataset),
+        (
+            args.model,
+            {
+                **kwargs_dataset,
+                "max_files": val_size * config.max_files,
+                "dataset_type": "val",
+            },
+        ),
+    ]
+
+    with Pool(processes=os.cpu_count()) as pool:
+        train_dataset, val_dataset = pool.map(__create_dataset, tasks)
+
+    tasks = [
+        (
+            train_dataset.dataset,
+            (h5_file_path_train, json_file_path_train),
+            isinstance(config, ConfigLatentDiffusion),
+            train_dataset.map_writer_id,
+        ),
+        (
+            val_dataset.dataset,
+            (h5_file_path_val, json_file_path_val),
+            isinstance(config, ConfigLatentDiffusion),
+            val_dataset.map_writer_id,
+        ),
+    ]
+
+    with Pool(processes=os.cpu_count()) as pool:
+        pool.map(__parallel_save_dataset, tasks)
+
+
+def __get_file_paths(model: str) -> tuple[Path, Path, Path, Path]:
+    """Get file paths for HDF5 and JSON files based on the model type.
+
+    Args:
+        model (str): The type of model.
+
+    Returns:
+        tuple[Path, Path, Path, Path]: Paths for train HDF5, val HDF5, train JSON, and val JSON files.
+    """
     h5_file_path_train = Path(
-        f"./data/h5_dataset/train_{'iamondb' if args.config in ('Diffusion', 'RNN') else 'iamdb'}.h5"
-    )
+        f"./data/h5_dataset/train_{"iamondb" if model == "Diffusion" else "iamdb"}.h5"
+    ).resolve()
     h5_file_path_val = Path(
-        f"./data/h5_dataset/val_{'iamondb' if args.config in ('Diffusion', 'RNN') else 'iamdb'}.h5"
-    )
+        f"./data/h5_dataset/val_{"iamondb" if model == "Diffusion" else "iamdb"}.h5"
+    ).resolve()
     json_file_path_train = Path(
-        f"data/json_writer_ids/train_writer_ids_{'iamondb' if args.config in ('Diffusion', 'RNN') else 'iamdb'}.json"
-    )
+        f"./data/json_writer_ids/train_writer_ids_{"iamondb" if model == "Diffusion" else "iamdb"}.json"
+    ).resolve()
     json_file_path_val = Path(
-        f"data/json_writer_ids/val_writer_ids_{'iamondb' if args.config in ('Diffusion', 'RNN') else 'iamdb'}.json"
-    )
+        f"./data/json_writer_ids/val_writer_ids_{"iamondb" if model == "Diffusion" else "iamdb"}.json"
+    ).resolve()
 
-    if args.config in ("Diffusion", "RNN"):
-        kwargs_dataset["max_seq_len"] = config.max_seq_len
-
-    with contextlib.suppress(FileNotFoundError):
-        os.remove(h5_file_path_train)
-        os.remove(h5_file_path_val)
-        os.remove(json_file_path_train)
-        os.remove(json_file_path_val)
-
-    dataset = DATASETS[args.config](**kwargs_dataset)
-
-    utils.save_dataset(
-        dataset.dataset,
-        (h5_file_path_train, json_file_path_train),
-        is_latent=is_latent,
-        map_writer_ids=dataset.map_writer_id,
-    )
-
-    kwargs_dataset["max_files"] = val_size * config.max_files
-    kwargs_dataset["dataset_type"] = "val"
-
-    dataset = DATASETS[args.config](**kwargs_dataset)
-
-    utils.save_dataset(
-        dataset.dataset,
-        (h5_file_path_val, json_file_path_val),
-        is_latent=is_latent,
-        map_writer_ids=dataset.map_writer_id,
+    return (
+        h5_file_path_train,
+        h5_file_path_val,
+        json_file_path_train,
+        json_file_path_val,
     )
 
 
 if __name__ == "__main__":
     args = cli_main()
 
-    if sys.version_info < (3, 8):
-        raise SystemExit("Only Python 3.8 and above is supported")
+    config_file = f"configs/{args.model}/{args.config}"
+    config = load_config(config_file, args.model)
 
-    config_file = f"configs/{args.config}/{args.config_file}"
-
-    config = CONFIGS[args.config].from_yaml_file(
-        file=config_file, decoder=yaml.load, Loader=yaml.Loader
-    )
-
-    prepare_data()
+    prepare_data(config, args)

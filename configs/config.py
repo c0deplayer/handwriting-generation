@@ -6,7 +6,6 @@ from dataclass_wizard import YAMLWizard
 
 @dataclass
 class BaseConfig(YAMLWizard, key_transform="SNAKE"):
-    device: str
     batch_size: int
     max_epochs: int
     max_files: int
@@ -74,4 +73,3 @@ class ConfigDiffusion(BaseConfig):
             "z01-010c",
         ),
     )
-
