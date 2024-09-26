@@ -1,0 +1,13 @@
+checkpoint_path: "./model_checkpoints/ConvNeXt"
+data_path: "./raw_data/IAMDB"
+
+max_epochs: 1000
+batch_size: 200
+img_height: 64
+img_width: 256
+max_text_len: 12
+max_files: 0
+vocab: ' _abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ,.''-":()!'
+train_size: 0.9
+
+gen_model_type: "LatentDiffusion"
