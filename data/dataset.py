@@ -18,7 +18,6 @@ from configs.config import (
 from data.tokenizer import Tokenizer
 from models.Diffusion.text_style import StyleExtractor
 from utils import data_utils
-from utils.utils import get_device
 
 
 class DataModule(L.LightningDataModule):
@@ -206,6 +205,8 @@ class IAMonDataset(Dataset):
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
         ])
+
+        from utils.utils import get_device
 
         self.style_extractor = StyleExtractor(
             device=torch.device(get_device() if use_gpu else "cpu")
