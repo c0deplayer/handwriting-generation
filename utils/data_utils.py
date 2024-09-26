@@ -56,7 +56,9 @@ def get_transcription(path: Path) -> dict[str, str]:
     with path.open(mode="r") as file:
         transcription_lines = file.readlines()
 
-    transcription_lines = list(filter(None, map(str.rstrip, transcription_lines)))
+    transcription_lines = list(
+        filter(None, map(str.rstrip, transcription_lines))
+    )
 
     try:
         start_index = transcription_lines.index("CSR:") + 1
@@ -174,13 +176,17 @@ def __combine_strokes(strokes: np.ndarray, n: int) -> np.ndarray:
     s, s_neighbors = strokes[::2, :2], strokes[1::2, :2]
 
     values = (
-        norm(s, axis=-1) + norm(s_neighbors, axis=-1) - norm(s + s_neighbors, axis=-1)
+        norm(s, axis=-1)
+        + norm(s_neighbors, axis=-1)
+        - norm(s + s_neighbors, axis=-1)
     )
     indices = np.argsort(values)[:n]
 
     combined_strokes = strokes.copy()
     combined_strokes[indices * 2] += combined_strokes[indices * 2 + 1]
-    combined_strokes[indices * 2, 2] = np.greater(combined_strokes[indices * 2, 2], 0)
+    combined_strokes[indices * 2, 2] = np.greater(
+        combined_strokes[indices * 2, 2], 0
+    )
     combined_strokes = np.delete(combined_strokes, indices * 2 + 1, axis=0)
     combined_strokes[:, :2] /= np.std(combined_strokes[:, :2])
 
@@ -384,7 +390,9 @@ def get_max_seq_len(strokes_path: Path) -> int:
         print("No XML files found in the specified directory.")
         return max_length
 
-    for xml_file in track(xml_files, description="Calculating max sequence length..."):
+    for xml_file in track(
+        xml_files, description="Calculating max sequence length..."
+    ):
         strokes = get_line_strokes(xml_file, 0)
         if strokes is not None:
             max_length = max(max_length, len(strokes))
@@ -520,7 +528,9 @@ def load_dataset(
     return dataset, map_writer_id
 
 
-def save_json_file(json_path: Optional[Path], map_writer_ids: dict[str, int]) -> None:
+def save_json_file(
+    json_path: Optional[Path], map_writer_ids: dict[str, int]
+) -> None:
     """
     Save writer ID mappings to a JSON file.
 

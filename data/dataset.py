@@ -1,20 +1,24 @@
-import os
 from pathlib import Path
-from typing import Any, Literal, Type
+from typing import Any, Literal, Optional, Type
 
 import lightning as L
 import torch
-from einops import rearrange
 from rich.progress import track
 from torch import Tensor
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, random_split
 from torchvision.transforms import v2
 
-from configs.config import BaseConfig, ConfigDiffusion, ConfigLatentDiffusion
+from configs.config import (
+    BaseConfig,
+    ConfigConvNeXt,
+    ConfigDiffusion,
+    ConfigInception,
+    ConfigLatentDiffusion,
+)
 from data.tokenizer import Tokenizer
 from models.Diffusion.text_style import StyleExtractor
 from utils import data_utils
-from utils.train_utils import get_device
+from utils.utils import get_device
 
 
 class DataModule(L.LightningDataModule):
@@ -24,18 +28,14 @@ class DataModule(L.LightningDataModule):
     training and validation data seamlessly.
 
     Args:
-        dataset (Dataset): The dataset class to be used for loading data.
-        config (Union[ConfigDiffusion, ConfigLatentDiffusion]): A configuration object specifying
-            dataset parameters and other relevant settings.
-
-    Raises:
-        TypeError: If the `config` object is not an instance of `ConfigDiffusion`,
-                   or `ConfigLatentDiffusion`.
+        dataset (Type[Dataset]): The dataset class to be used for loading data.
+        config (BaseConfig): A configuration object specifying dataset parameters and other relevant settings.
+        use_gpu (bool): Whether to use GPU for data loading.
 
     Attributes:
         train_dataset (Dataset): The training dataset, initially set to None.
         val_dataset (Dataset): The validation dataset, initially set to None.
-        dataset (Dataset): The dataset class used for loading data.
+        dataset (Type[Dataset]): The dataset class used for loading data.
         __config (BaseConfig): The configuration object specifying dataset parameters and settings.
         batch_size (int): The batch size used for data loading.
         max_text_len (int): The maximum length of text data.
@@ -45,6 +45,7 @@ class DataModule(L.LightningDataModule):
         max_seq_len (int): The maximum sequence length (if applicable).
         train_size (float): The proportion of data used for training.
         val_size (float): The proportion of data used for validation.
+        use_gpu (bool): Whether to use GPU for data loading.
 
     Methods:
         setup(stage: str) -> None:
@@ -64,12 +65,6 @@ class DataModule(L.LightningDataModule):
         use_gpu: bool = False,
     ) -> None:
         super().__init__()
-
-        if not isinstance(config, (ConfigDiffusion, ConfigLatentDiffusion)):
-            raise TypeError(
-                "Expected config to be ConfigDiffusion, or ConfigLatentDiffusion, "
-                f"got {type(config).__name__}"
-            )
 
         self.dataset = dataset
         self.__config = config
@@ -92,8 +87,21 @@ class DataModule(L.LightningDataModule):
             stage (str): The stage of the training process ('fit', 'validate', or 'test').
         """
         if stage == "fit":
-            self.train_dataset = self._create_dataset("train", self.train_size)
-            self.val_dataset = self._create_dataset("val", self.val_size)
+            if isinstance(
+                self.__config, (ConfigDiffusion, ConfigLatentDiffusion)
+            ):
+                self.train_dataset = self._create_dataset(
+                    "train", self.train_size
+                )
+                self.val_dataset = self._create_dataset("val", self.val_size)
+            else:
+                dataset = self._create_dataset("train", self.train_size)
+                train_length = int(self.train_size * len(dataset))
+                val_length = len(dataset) - train_length
+
+                self.train_dataset, self.val_dataset = random_split(
+                    dataset, [train_length, val_length]
+                )
 
     def _create_dataset(self, dataset_type: str, size: float) -> Dataset:
         """
@@ -111,11 +119,13 @@ class DataModule(L.LightningDataModule):
             "img_height": self.img_height,
             "img_width": self.img_width,
             "max_text_len": self.max_text_len,
-            "max_files": size * self.max_files,
+            "max_files": int(size * self.max_files),
             "dataset_type": dataset_type,
             "use_gpu": self.use_gpu,
         }
-        if isinstance(self.__config, ConfigDiffusion):
+        if isinstance(
+            self.__config, (ConfigDiffusion, ConfigConvNeXt, ConfigInception)
+        ):
             kwargs_dataset["max_seq_len"] = self.max_seq_len
 
         return self.dataset(**kwargs_dataset)
@@ -131,11 +141,6 @@ class DataModule(L.LightningDataModule):
             self.train_dataset,
             batch_size=self.batch_size,
             shuffle=True,
-            num_workers=os.cpu_count() // 4,
-            multiprocessing_context=(
-                "fork" if torch.backends.mps.is_available() else None
-            ),
-            persistent_workers=True,
             pin_memory=True,
         )
 
@@ -150,19 +155,13 @@ class DataModule(L.LightningDataModule):
             self.val_dataset,
             batch_size=self.batch_size,
             shuffle=False,
-            num_workers=os.cpu_count() // 4,
-            multiprocessing_context=(
-                "fork" if torch.backends.mps.is_available() else None
-            ),
-            persistent_workers=True,
             pin_memory=True,
         )
 
 
 class IAMonDataset(Dataset):
     """
-    This dataset class is designed for loading and preprocessing data from the IAM Online handwriting recognition dataset.
-    It is intended to be used with PyTorch data loaders for training, validation, and testing purposes.
+    Dataset class for loading and preprocessing data from the IAM Online handwriting recognition dataset.
 
     Args:
         img_height (int): The height of images in the dataset.
@@ -172,37 +171,9 @@ class IAMonDataset(Dataset):
         max_files (int): The maximum number of data files to load.
         config (ConfigDiffusion): A configuration object specifying dataset parameters and settings.
         dataset_type (Literal["train", "val", "test"]): The type of dataset to load ("train," "val," or "test").
+        use_gpu (bool): Whether to use GPU for data loading.
         strict (bool, optional): Whether to enforce strict vocabulary constraints (default: False).
         inception (bool, optional): Whether to use inception-style preprocessing (default: False).
-
-    Attributes:
-        img_height (int): The height of the images in the dataset.
-        img_width (int): The width of the images in the dataset.
-        max_seq_len (int): The maximum sequence length of the data.
-        max_text_len (int): The maximum length of the text data.
-        max_files (int): The maximum number of files to load.
-        style_extractor (StyleExtractor): Object for extracting style features.
-        tokenizer (Tokenizer): Tokenizer for text encoding.
-        dataset_type (Literal["train", "val", "test"]): Type of the dataset.
-        dataset_txt (list[str]): List of dataset filenames.
-
-    Methods:
-        __load_dataset__(self) -> None:
-            Load the dataset from an HDF5 file or preprocess it if necessary.
-
-        preprocess_data(self) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
-            Preprocess the dataset by loading and formatting data from the raw IAM Online dataset.
-
-        __getitem__(self, index: int) -> Tuple[Tensor, ...]:
-            Get a data item from the dataset.
-
-        __len__(self) -> int:
-            Get the length of the dataset.
-
-    Properties:
-        config (ConfigDiffusion): The configuration object.
-        dataset (List[Dict[str, Any]]): The loaded dataset.
-        map_writer_id (Dict[str, int]): Mapping of writer IDs.
     """
 
     def __init__(
@@ -221,19 +192,16 @@ class IAMonDataset(Dataset):
     ) -> None:
         super().__init__()
 
-        self.__config = config
-        self._strict = strict
-        self._inception = inception
+        self.config = config
+        self.strict = strict
+        self.inception = inception
         self.img_height = img_height
         self.img_width = img_width
         self.max_seq_len = (
-            max_seq_len
-            if max_seq_len > 0
-            else data_utils.get_max_seq_len(Path(f"{config.data_path}/lineStrokes"))
+            max_seq_len if max_seq_len > 0 else self.__get_max_seq_len()
         )
         self.max_text_len = max_text_len
         self.max_files = max_files
-        self._diffusion = isinstance(config, ConfigDiffusion)
         self.transforms = v2.Compose([
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
@@ -243,36 +211,47 @@ class IAMonDataset(Dataset):
             device=torch.device(get_device() if use_gpu else "cpu")
         )
         self.tokenizer = Tokenizer(config.vocab)
-
         self.dataset_type = dataset_type
+        self.dataset_txt = self.__load_dataset_txt()
+        self.dataset, self.map_writer_id = self.__load_dataset()
 
+        print(
+            f"Size of dataset: {len(self.dataset)} || Length of writer styles -- {len(self.map_writer_id)}"
+        )
+
+    def __load_dataset_txt(self) -> list[str]:
         type_dict = {
             "train": "iamondb_tr_va1.filter",
             "val": "iamondb_va2.filter",
             "test": "iamondb_test.filter",
         }
+        dataset_file = (
+            Path(self.config.data_path) / type_dict[self.dataset_type]
+        )
+        with dataset_file.open("r") as f:
+            return f.readlines()
 
-        with open(f"{config.data_path}/{type_dict[dataset_type]}", mode="r") as f:
-            self.dataset_txt = f.readlines()
-
-        self.__load_dataset__()
-        print(
-            f"Size of dataset: {len(self.dataset)} || Length of writer styles -- {len(self.map_writer_id)}"
+    def __get_max_seq_len(self) -> int:
+        return data_utils.get_max_seq_len(
+            Path(f"{self.config.data_path}/lineStrokes")
         )
 
-    def __load_dataset__(self) -> None:
+    def __load_dataset(
+        self,
+    ) -> tuple[list[dict[str, Any]], Optional[dict[str, int]]]:
         h5_file_path = Path(f"./data/h5_dataset/{self.dataset_type}_iamondb.h5")
         json_file_path = Path(
             f"./data/json_writer_ids/{self.dataset_type}_writer_ids_iamondb.json"
         )
-        if h5_file_path.is_file() and not self._strict:
-            self.__dataset, self.__map_writer_id = data_utils.load_dataset(
+
+        if h5_file_path.is_file() and not self.strict:
+            return data_utils.load_dataset(
                 (h5_file_path, json_file_path), self.max_files
             )
         else:
-            self.__dataset, self.__map_writer_id = self.preprocess_data()
+            return self.__preprocess_data()
 
-    def preprocess_data(self) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    def __preprocess_data(self) -> tuple[list[dict[str, Any]], dict[str, int]]:
         dataset, map_writer_id = [], {}
         raw_data_path = Path(self.config.data_path).resolve()
         ascii_path = raw_data_path / "ascii"
@@ -285,45 +264,25 @@ class IAMonDataset(Dataset):
             description=f"[cyan]Preparing {self.dataset_type} IAM Online DataLoader...",
         ):
             idx = line.strip()
-            path_txt = ascii_path / f"{idx[:3]}/{idx[:7]}/{idx}.txt"
-            path_file_original_xml = original_path / f"{idx[:3]}/{idx[:7]}"
-
-            writer_id = data_utils.get_writer_id(path_file_original_xml, idx)
-
-            transcription = data_utils.get_transcription(path_txt)
+            writer_id, transcription = self.__get_writer_and_transcription(
+                idx, ascii_path, original_path
+            )
 
             for file, raw_text in transcription.items():
-                if len(raw_text) > self.max_text_len:
+                if not self.__is_valid_text(raw_text):
                     continue
 
-                if self._strict and not all(c in self.config.vocab for c in raw_text):
-                    continue
-
-                path_file_xml = strokes_path / f"{idx[:3]}/{idx[:7]}/{file}.xml"
-                path_file_tif = img_path / f"{idx[:3]}/{idx[:7]}/{file}.tif"
-
-                strokes = data_utils.get_line_strokes(path_file_xml, self.max_seq_len)
-
-                one_hot, text = data_utils.get_encoded_text_with_one_hot_encoding(
-                    raw_text, self.tokenizer, self.max_text_len
+                strokes, image, style = self.__get_strokes_image_style(
+                    idx, file, strokes_path, img_path
                 )
-
-                image = data_utils.get_image(
-                    path_file_tif,
-                    self.img_width,
-                    self.img_height,
-                    centering=(0.0, 0.5),
-                )
-
                 if strokes is None or image is None:
                     continue
 
-                writer_image = v2.PILToTensor()(image).to(torch.float32)
-                writer_image = rearrange(writer_image, "1 h w -> 1 1 h w")
-                with torch.inference_mode():
-                    style = rearrange(
-                        self.style_extractor(writer_image), "1 h w -> h w"
+                one_hot, text = (
+                    data_utils.get_encoded_text_with_one_hot_encoding(
+                        raw_text, self.tokenizer, self.max_text_len
                     )
+                )
 
                 dataset.append({
                     "writer": writer_id,
@@ -336,58 +295,74 @@ class IAMonDataset(Dataset):
                     "style": style,
                 })
 
-                if writer_id not in map_writer_id.keys():
-                    map_writer_id[writer_id] = len(map_writer_id)
+                map_writer_id.setdefault(writer_id, len(map_writer_id))
 
                 if self.max_files and len(dataset) >= self.max_files:
                     return dataset, map_writer_id
 
-        self.style_extractor = self.style_extractor.to("cpu")
-
+        self.style_extractor = self.style_extractor.to(device="cpu")
         return dataset, map_writer_id
 
-    @property
-    def config(self) -> ConfigDiffusion:
-        return self.__config
+    def __get_writer_and_transcription(
+        self, idx: str, ascii_path: Path, original_path: Path
+    ) -> tuple[int, dict[str, str]]:
+        path_txt = ascii_path / f"{idx[:3]}/{idx[:7]}/{idx}.txt"
+        path_file_original_xml = original_path / f"{idx[:3]}/{idx[:7]}"
+        writer_id = data_utils.get_writer_id(path_file_original_xml, idx)
+        transcription = data_utils.get_transcription(path_txt)
 
-    @property
-    def dataset(self) -> list[dict[str, Any]]:
-        return self.__dataset
+        return writer_id, transcription
 
-    @property
-    def map_writer_id(self) -> dict[str, int]:
-        return self.__map_writer_id
+    def __is_valid_text(self, text: str) -> bool:
+        return len(text) <= self.max_text_len and (
+            not self.strict or all(c in self.config.vocab for c in text)
+        )
 
-    def __getitem__(self, index: int) -> tuple[Tensor, ...]:
-        if self._inception:
-            image = self.transforms(self.dataset[index]["image"])
-            w_index = str(self.dataset[index]["writer"])
+    def __get_strokes_image_style(
+        self, idx: str, file: str, strokes_path: Path, img_path: Path
+    ) -> tuple[Any, Any, Any]:
+        path_file_xml = strokes_path / f"{idx[:3]}/{idx[:7]}/{file}.xml"
+        path_file_tif = img_path / f"{idx[:3]}/{idx[:7]}/{file}.tif"
 
-            writer_id = torch.tensor(self.map_writer_id[w_index], dtype=torch.int32)
-            text = torch.tensor(self.dataset[index]["text"])
+        strokes = data_utils.get_line_strokes(path_file_xml, self.max_seq_len)
+        image = data_utils.get_image(
+            path_file_tif, self.img_width, self.img_height, centering=(0.0, 0.5)
+        )
 
-            return writer_id, image, text
-        elif self._diffusion:
-            strokes = torch.tensor(self.dataset[index]["strokes"], dtype=torch.float32)
-            text = torch.tensor(self.dataset[index]["text"])
-            style = self.dataset[index]["style"]
-            image = self.transforms(self.dataset[index]["image"])
-
-            return strokes, text, style, image
+        if image is not None:
+            writer_image = (
+                v2.PILToTensor()(image).unsqueeze(0).to(torch.float32)
+            )
+            with torch.inference_mode():
+                style = self.style_extractor(writer_image).squeeze(0)
         else:
-            strokes = torch.tensor(self.dataset[index]["strokes"], dtype=torch.float32)
-            text = torch.tensor(self.dataset[index]["one_hot"], dtype=torch.float32)
+            style = None
 
-            return strokes, text
+        return strokes, image, style
 
     def __len__(self) -> int:
         return len(self.dataset)
 
+    def __getitem__(self, index: int) -> tuple[Tensor, ...]:
+        item = self.dataset[index]
+        if isinstance(self.config, (ConfigConvNeXt, ConfigInception)):
+            image = self.transforms(item["image"])
+            writer_id = torch.tensor(
+                self.map_writer_id[item["writer"]], dtype=torch.int32
+            )
+            text = torch.tensor(item["text"])
+            return writer_id, image, text
+        else:
+            strokes = torch.tensor(item["strokes"], dtype=torch.float32)
+            text = torch.tensor(item["text"])
+            style = item["style"]
+            image = self.transforms(item["image"])
+            return strokes, text, style, image
+
 
 class IAMDataset(Dataset):
     """
-    This class is designed to handle the IAM Database handwriting dataset. It provides methods for loading
-    and preprocessing the data, and for retrieving data samples for training or validation.
+    Handles the IAM Database handwriting dataset, providing methods for loading, preprocessing, and retrieving data samples.
 
     Args:
         config (ConfigLatentDiffusion): Configuration object specifying dataset parameters and settings.
@@ -397,27 +372,6 @@ class IAMDataset(Dataset):
         max_files (int): The maximum number of files to load.
         dataset_type (Literal["train", "val", "test"]): Type of the dataset - train, validation, or test.
         strict (bool, optional): Whether to apply strict constraints on data filtering. Defaults to False.
-
-    Attributes:
-        img_height (int): The height of the images in the dataset.
-        img_width (int): The width of the images in the dataset.
-        max_text_len (int): The maximum length of the text data.
-        max_files (int): The maximum number of files to load.
-        transforms (torchvision.transforms.Compose): Image transformations for data preprocessing.
-        dataset_type (Literal["train", "val", "test"]): Type of the dataset.
-        tokenizer (Tokenizer): Tokenizer for text encoding.
-        dataset_txt (List[str]): List of dataset filenames.
-
-    Properties:
-        config (ConfigLatentDiffusion): The configuration object.
-        dataset (List[Dict[str, Any]]): The loaded dataset.
-        map_writer_id (Dict[str, int]): A mapping of writer IDs to integer indices.
-
-    Methods:
-        __init__(...): Initializes an instance of the IAMDataset class.
-        __load_data__() -> None: Loads the dataset into memory.
-        preprocess_data() -> Tuple[List[Dict[str, Any]], Dict[str, int]]: Preprocesses the data.
-        __getitem__(index: int) -> Tuple[Tensor, Tensor, Tensor]: Retrieves a specific item from the dataset.
     """
 
     def __init__(
@@ -431,49 +385,60 @@ class IAMDataset(Dataset):
         *,
         strict: bool = False,
     ) -> None:
-        self.__config = config
-        self._strict = strict
+        self.config = config
+        self.strict = strict
         self.max_text_len = max_text_len
         self.max_files = max_files
+        self.img_height = img_height
+        self.img_width = img_width
+        self.dataset_type = dataset_type
+
         self.transforms = v2.Compose([
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
         ])
-        self.img_height = img_height
-        self.img_width = img_width
-        self.dataset_type = dataset_type
 
         self.tokenizer = Tokenizer(config.vocab)
+        self.dataset_txt = self.__load_dataset_txt()
+        self.dataset, self.map_writer_id = self.__load_data()
 
+        print(
+            f"Size of dataset: {len(self.dataset)} || Length of writer styles -- {len(self.map_writer_id)}"
+        )
+
+    def __load_dataset_txt(self) -> list[str]:
         type_dict = {
             "train": "iam_tr_va1.filter",
             "val": "iam_va2.filter",
             "test": "iam_test.filter",
         }
-
-        with open(f"{config.data_path}/{type_dict[dataset_type]}", mode="r") as f:
-            self.dataset_txt = f.readlines()
-
-        self.__load_data__()
-        print(
-            f"Size of dataset: {len(self.dataset)} || Length of writer styles -- {len(self.map_writer_id)}"
+        dataset_file = (
+            Path(self.config.data_path) / type_dict[self.dataset_type]
         )
+        with dataset_file.open("r") as f:
+            return f.readlines()
 
-    def __load_data__(self) -> None:
+    def __load_data(
+        self,
+    ) -> tuple[list[dict[str, Any]], Optional[dict[str, int]]]:
         h5_file_path = Path(f"./data/h5_dataset/{self.dataset_type}_iamdb.h5")
         json_file_path = Path(
             f"./data/json_writer_ids/{self.dataset_type}_writer_ids_iamdb.json"
         )
 
-        if h5_file_path.is_file() and json_file_path.is_file() and not self._strict:
-            self.__dataset, self.__map_writer_id = data_utils.load_dataset(
+        if (
+            h5_file_path.is_file()
+            and json_file_path.is_file()
+            and not self.strict
+        ):
+            return data_utils.load_dataset(
                 (h5_file_path, json_file_path), self.max_files, latent=True
             )
         else:
-            self.__dataset, self.__map_writer_id = self.preprocess_data()
+            return self.__preprocess_data()
 
-    def preprocess_data(self) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    def __preprocess_data(self) -> tuple[list[dict[str, Any]], dict[str, int]]:
         dataset, map_writer_id = [], {}
         raw_data_path = Path(self.config.data_path)
 
@@ -481,24 +446,11 @@ class IAMDataset(Dataset):
             self.dataset_txt,
             description=f"Preparing {self.dataset_type} IAM Dataloader...",
         ):
-            parts = line.split(" ")
-            writer_id, image_id = parts[0].split(",")[0], parts[0].split(",")[1]
-            label = parts[1].rstrip()
-
-            if len(label) > self.max_text_len:
+            writer_id, image_id, label = self.__parse_line(line)
+            if not self.__is_valid_label(label):
                 continue
 
-            if self._strict and not all(c in self.config.vocab for c in label):
-                continue
-
-            image_parts = image_id.split("-")
-            f_folder, s_folder = (
-                image_parts[0],
-                f"{image_parts[0]}-{image_parts[1]}",
-            )
-
-            img_path = raw_data_path / f"words/{f_folder}/{s_folder}/{image_id}.png"
-
+            img_path = self.__get_image_path(raw_data_path, image_id)
             image = data_utils.get_image(
                 img_path,
                 self.img_width,
@@ -510,43 +462,55 @@ class IAMDataset(Dataset):
             if image is None:
                 continue
 
-            if self.transforms is not None:
-                image = self.transforms(image)
-
-            _, label = data_utils.get_encoded_text_with_one_hot_encoding(
-                label, self.tokenizer, self.max_text_len
+            image = self.transforms(image)
+            _, encoded_label = (
+                data_utils.get_encoded_text_with_one_hot_encoding(
+                    label, self.tokenizer, self.max_text_len
+                )
             )
 
-            dataset.append({"writer": writer_id, "image": image, "label": label})
-
-            if writer_id not in map_writer_id.keys():
-                map_writer_id[writer_id] = len(map_writer_id)
+            dataset.append({
+                "writer": writer_id,
+                "image": image,
+                "label": encoded_label,
+            })
+            map_writer_id.setdefault(writer_id, len(map_writer_id))
 
             if self.max_files and len(dataset) >= self.max_files:
-                return dataset, map_writer_id
+                break
 
         return dataset, map_writer_id
 
-    @property
-    def config(self) -> ConfigLatentDiffusion:
-        return self.__config
+    def __parse_line(self, line: str) -> tuple[str, str, str]:
+        parts = line.split(" ")
+        writer_id, image_id = parts[0].split(",")
+        label = parts[1].rstrip()
 
-    @property
-    def dataset(self) -> list[dict[str, Any]]:
-        return self.__dataset
+        return writer_id, image_id, label
 
-    @property
-    def map_writer_id(self) -> dict[str, int]:
-        return self.__map_writer_id
+    def __is_valid_label(self, label: str) -> bool:
+        return len(label) <= self.max_text_len and (
+            not self.strict or all(c in self.config.vocab for c in label)
+        )
+
+    def __get_image_path(self, raw_data_path: Path, image_id: str) -> Path:
+        image_parts = image_id.split("-")
+        f_folder, s_folder = (
+            image_parts[0],
+            f"{image_parts[0]}-{image_parts[1]}",
+        )
+        return raw_data_path / f"words/{f_folder}/{s_folder}/{image_id}.png"
 
     def __len__(self) -> int:
         return len(self.dataset)
 
-    def __getitem__(self, index: int) -> tuple[Tensor, Tensor, Tensor]:
-        w_index = self.dataset[index]["writer"]
-
-        writer_id = torch.tensor(self.map_writer_id[w_index], dtype=torch.int32)
-        image = self.dataset[index]["image"]
-        label = torch.tensor(self.dataset[index]["label"], dtype=torch.long)
-
+    def __getitem__(
+        self, index: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        item = self.dataset[index]
+        writer_id = torch.tensor(
+            self.map_writer_id[item["writer"]], dtype=torch.int32
+        )
+        image = item["image"]
+        label = torch.tensor(item["label"], dtype=torch.long)
         return writer_id, image, label
