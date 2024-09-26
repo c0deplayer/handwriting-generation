@@ -1,6 +1,6 @@
 import os
 from argparse import ArgumentParser, Namespace
-from multiprocessing import Pool
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -58,7 +58,6 @@ def __create_dataset(args: tuple) -> Any:
         Any: The created dataset.
     """
     dataset_class, kwargs = args
-
     return DATASETS[dataset_class](**kwargs)
 
 
@@ -87,12 +86,15 @@ def prepare_data(config: BaseConfig, args: Namespace) -> None:
 
     Path("./data/h5_dataset").mkdir(parents=True, exist_ok=True)
 
-    h5_file_path_train, h5_file_path_val, json_file_path_train, json_file_path_val = (
-        __get_file_paths(args.model)
-    )
+    (
+        h5_file_path_train,
+        h5_file_path_val,
+        json_file_path_train,
+        json_file_path_val,
+    ) = __get_file_paths(args.model)
 
     if isinstance(config, ConfigDiffusion):
-        kwargs_dataset |= {"max_seq_len": config.max_seq_len}
+        kwargs_dataset["max_seq_len"] = config.max_seq_len
 
     data_utils.remove_existing_files([
         h5_file_path_train,
@@ -113,8 +115,8 @@ def prepare_data(config: BaseConfig, args: Namespace) -> None:
         ),
     ]
 
-    with Pool(processes=os.cpu_count()) as pool:
-        train_dataset, val_dataset = pool.map(__create_dataset, tasks)
+    with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
+        train_dataset, val_dataset = executor.map(__create_dataset, tasks)
 
     tasks = [
         (
@@ -131,8 +133,8 @@ def prepare_data(config: BaseConfig, args: Namespace) -> None:
         ),
     ]
 
-    with Pool(processes=os.cpu_count()) as pool:
-        pool.map(__parallel_save_dataset, tasks)
+    with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
+        executor.map(__parallel_save_dataset, tasks)
 
 
 def __get_file_paths(model: str) -> tuple[Path, Path, Path, Path]:
@@ -144,24 +146,14 @@ def __get_file_paths(model: str) -> tuple[Path, Path, Path, Path]:
     Returns:
         tuple[Path, Path, Path, Path]: Paths for train HDF5, val HDF5, train JSON, and val JSON files.
     """
-    h5_file_path_train = Path(
-        f"./data/h5_dataset/train_{"iamondb" if model == "Diffusion" else "iamdb"}.h5"
-    ).resolve()
-    h5_file_path_val = Path(
-        f"./data/h5_dataset/val_{"iamondb" if model == "Diffusion" else "iamdb"}.h5"
-    ).resolve()
-    json_file_path_train = Path(
-        f"./data/json_writer_ids/train_writer_ids_{"iamondb" if model == "Diffusion" else "iamdb"}.json"
-    ).resolve()
-    json_file_path_val = Path(
-        f"./data/json_writer_ids/val_writer_ids_{"iamondb" if model == "Diffusion" else "iamdb"}.json"
-    ).resolve()
-
+    suffix = "iamondb" if model == "Diffusion" else "iamdb"
     return (
-        h5_file_path_train,
-        h5_file_path_val,
-        json_file_path_train,
-        json_file_path_val,
+        Path(f"./data/h5_dataset/train_{suffix}.h5").resolve(),
+        Path(f"./data/h5_dataset/val_{suffix}.h5").resolve(),
+        Path(
+            f"./data/json_writer_ids/train_writer_ids_{suffix}.json"
+        ).resolve(),
+        Path(f"./data/json_writer_ids/val_writer_ids_{suffix}.json").resolve(),
     )
 
 
