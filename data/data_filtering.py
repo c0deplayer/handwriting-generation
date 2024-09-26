@@ -1,3 +1,7 @@
+import sys
+
+sys.path.append(".")
+
 import os
 import string
 from pathlib import Path
@@ -25,7 +29,9 @@ def read_lines(file_path: Path, skip_lines: int = 0) -> list[str]:
     return [line.strip() for line in lines]
 
 
-def write_data_to_file(file_path: Path, data: list[str], description: str) -> None:
+def write_data_to_file(
+    file_path: Path, data: list[str], description: str
+) -> None:
     """Writes a list of strings to a file, with a progress description.
 
     Args:
@@ -63,7 +69,12 @@ def filter_data_iam_dataset(filter_punctuation: bool = True) -> None:
     forms_path = data_path_tmp / "ascii/forms.txt"
     data_split_paths = [
         data_path_tmp / f"raw_data_split/{set_name}.txt"
-        for set_name in ["trainset", "validationset1", "validationset2", "testset"]
+        for set_name in [
+            "trainset",
+            "validationset1",
+            "validationset2",
+            "testset",
+        ]
     ]
 
     train_files, val_files, test_files = [], [], []
@@ -88,7 +99,11 @@ def filter_data_iam_dataset(filter_punctuation: bool = True) -> None:
             raise IndexError("Writer_id is empty!")
 
         split_index = next(
-            (i for i, split in enumerate(split_txt_lines) if idx_full[:-3] in split),
+            (
+                i
+                for i, split in enumerate(split_txt_lines)
+                if idx_full[:-3] in split
+            ),
             None,
         )
         match split_index:
@@ -100,8 +115,14 @@ def filter_data_iam_dataset(filter_punctuation: bool = True) -> None:
                 test_files.append(f"{writer_id},{idx_full} {word}")
 
     file_data_mapping = {
-        "iam_tr_va1.filter": (train_files, "Saving train set for IAM Dataset..."),
-        "iam_va2.filter": (val_files, "Saving validation set for IAM Dataset..."),
+        "iam_tr_va1.filter": (
+            train_files,
+            "Saving train set for IAM Dataset...",
+        ),
+        "iam_va2.filter": (
+            val_files,
+            "Saving validation set for IAM Dataset...",
+        ),
         "iam_test.filter": (test_files, "Saving test set for IAM Dataset..."),
     }
 
@@ -130,7 +151,8 @@ def filter_data_iam_on_dataset(
     ascii_path = data_path_diff / "ascii"
 
     for file in track(
-        xml_path.rglob("*.xml"), description="Collecting information about IAMonDB..."
+        xml_path.rglob("*.xml"),
+        description="Collecting information about IAMonDB...",
     ):
         filename = file.stem
         dir_name = str(file.parent).split("/")[-1]
@@ -141,7 +163,9 @@ def filter_data_iam_on_dataset(
         xml_files.setdefault(dir_name, [])
         xml_files[dir_name].append(filename)
 
-    for file in track(ascii_path.rglob("*.txt"), description="Filtering IAMonDB..."):
+    for file in track(
+        ascii_path.rglob("*.txt"), description="Filtering IAMonDB..."
+    ):
         filename = file.stem
         dir_name = str(file.parent).split("/")[-1]
         xml_list = xml_files.get(dir_name)
@@ -155,11 +179,15 @@ def filter_data_iam_on_dataset(
             try:
                 root = ET.parse(path).getroot()
             except (ET.ParseError, FileNotFoundError) as e:
-                raise ET.ParseError(f"Failed to parse file {path}\n{str(e)}") from e
+                raise ET.ParseError(
+                    f"Failed to parse file {path}\n{str(e)}"
+                ) from e
 
             general_tag = root.find("General")
             writer_id = (
-                int(general_tag[0].attrib.get("writerID", "0")) if general_tag else 0
+                int(general_tag[0].attrib.get("writerID", "0"))
+                if general_tag is not None
+                else 0
             )
 
             if (filename[-1] == xml_file[-1]) or (
@@ -167,11 +195,13 @@ def filter_data_iam_on_dataset(
             ):
                 ascii_files.append(f"{writer_id},{filename}")
 
-    write_data_to_file(txt_file_iam_on_db, ascii_files, description="Saving IAMonDB...")
+    write_data_to_file(
+        txt_file_iam_on_db, ascii_files, description="Saving IAMonDB..."
+    )
 
 
 if __name__ == "__main__":
-    config_diff = load_config("../configs/Diffusion/base_gpu.yaml", "Diffusion")
+    config_diff = load_config("./configs/Diffusion/base_gpu.yaml", "Diffusion")
 
     data_path_tmp = Path("./raw_data/IAMDB/").resolve()
     data_path_diff = Path(config_diff.data_path).resolve()
@@ -179,4 +209,4 @@ if __name__ == "__main__":
     txt_file_iam_on_db = data_path_diff / "dataset.txt"
 
     filter_data_iam_dataset(filter_punctuation=True)
-    filter_data_iam_on_dataset(config_diff, force=False)
+    filter_data_iam_on_dataset(config_diff, force=True)
