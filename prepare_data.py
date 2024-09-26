@@ -2,7 +2,8 @@ import os
 from argparse import ArgumentParser, Namespace
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Any
+
+from torch.utils.data.dataloader import Dataset
 
 from configs.config import BaseConfig, ConfigDiffusion, ConfigLatentDiffusion
 from configs.constants import DATASETS
@@ -15,6 +16,7 @@ def cli_main() -> Namespace:
 
     Returns:
         Namespace: A namespace object containing parsed arguments.
+
     """
     parser = ArgumentParser()
     parser.add_argument(
@@ -41,35 +43,38 @@ def __parallel_save_dataset(args: tuple) -> None:
 
     Args:
         args (tuple): Arguments for the save_dataset function.
+
     """
     dataset, file_paths, is_latent, map_writer_ids = args
     data_utils.save_dataset(
-        dataset, file_paths, is_latent=is_latent, map_writer_ids=map_writer_ids
+        dataset,
+        file_paths,
+        is_latent=is_latent,
+        map_writer_ids=map_writer_ids,
     )
 
 
-def __create_dataset(args: tuple) -> Any:
+def __create_dataset(args: tuple) -> Dataset:
     """Create a dataset based on the provided arguments.
 
     Args:
         args (tuple): Arguments for creating the dataset.
 
     Returns:
-        Any: The created dataset.
+        Dataset: The created dataset.
+
     """
     dataset_class, kwargs = args
     return DATASETS[dataset_class](**kwargs)
 
 
 def prepare_data(config: BaseConfig, args: Namespace) -> None:
-    """Prepares and saves datasets for training and validation based on the specified model configurations.
+    """Prepare and save datasets for training and validation based on the specified model configurations.
 
     Args:
         config (BaseConfig): The loaded configuration object.
         args (Namespace): Parsed command-line arguments.
 
-    Raises:
-        FileNotFoundError: If specified dataset files do not exist and cannot be removed.
     """
     train_size = config.get("train_size", 0.8)
     val_size = 1.0 - train_size
@@ -79,7 +84,7 @@ def prepare_data(config: BaseConfig, args: Namespace) -> None:
         "img_height": config.get("img_height", 90),
         "img_width": config.get("img_width", 1400),
         "max_text_len": config.max_text_len,
-        "max_files": train_size * config.max_files,
+        "max_files": int(train_size * config.max_files),
         "use_gpu": True,
         "dataset_type": "train",
     }
@@ -144,14 +149,16 @@ def __get_file_paths(model: str) -> tuple[Path, Path, Path, Path]:
         model (str): The type of model.
 
     Returns:
-        tuple[Path, Path, Path, Path]: Paths for train HDF5, val HDF5, train JSON, and val JSON files.
+        tuple[Path, Path, Path, Path]: Paths for train HDF5, val HDF5,
+                                       train JSON, and val JSON files.
+
     """
     suffix = "iamondb" if model == "Diffusion" else "iamdb"
     return (
         Path(f"./data/h5_dataset/train_{suffix}.h5").resolve(),
         Path(f"./data/h5_dataset/val_{suffix}.h5").resolve(),
         Path(
-            f"./data/json_writer_ids/train_writer_ids_{suffix}.json"
+            f"./data/json_writer_ids/train_writer_ids_{suffix}.json",
         ).resolve(),
         Path(f"./data/json_writer_ids/val_writer_ids_{suffix}.json").resolve(),
     )
