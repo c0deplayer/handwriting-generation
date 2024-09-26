@@ -1,9 +1,10 @@
 import json
 import os
 from argparse import ArgumentParser, Namespace
-from typing import Any, Optional
+from pathlib import Path
+from typing import Any
 
-import lightning as L
+import lightning as lg
 import neptune
 import torch
 from dotenv import load_dotenv
@@ -35,13 +36,17 @@ def cli_main() -> Namespace:
 
     Returns:
         Namespace: A namespace object containing parsed arguments.
+
     """
     parser = ArgumentParser(description="Model Training CLI")
     parser.add_argument(
         "-m",
         "--model",
-        help="Model to train. Info: Inception and ConvNext are trained for style classification, "
-        "while Diffusion and LatentDiffusion are trained for text-to-image synthesis.",
+        help=(
+            "Model to train. Info: Inception and ConvNext are trained "
+            "for style classification, while Diffusion and LatentDiffusion "
+            "are trained for text-to-image synthesis."
+        ),
         choices=["Diffusion", "LatentDiffusion", "Inception", "ConvNeXt"],
         type=str,
         required=True,
@@ -56,7 +61,10 @@ def cli_main() -> Namespace:
     parser.add_argument(
         "-r",
         "--remote",
-        help="Flag indicating whether the model will be trained on a server with dedicated GPUs, such as the A100",
+        help=(
+            "Flag indicating whether the model will be trained on a server "
+            "with dedicated GPUs, such as the A100"
+        ),
         action="store_true",
     )
     parser.add_argument(
@@ -82,6 +90,10 @@ def get_model_params(config: BaseConfig) -> dict[str, Any]:
 
     Returns:
         dict[str, Any]: A dictionary containing model parameters.
+
+    Raises:
+        ValueError: If the configuration type is not supported.
+
     """
     match config:
         case ConfigDiffusion():
@@ -97,9 +109,8 @@ def get_model_params(config: BaseConfig) -> dict[str, Any]:
                 "use_ema": config.use_ema,
             }
         case ConfigLatentDiffusion():
-            with open(
-                "data/json_writer_ids/train_writer_ids.json", mode="r"
-            ) as fp:
+            json_path = Path("data/json_writer_ids/train_writer_ids.json")
+            with json_path.open() as fp:
                 map_writer_id = json.load(fp)
                 n_style_classes = len(map_writer_id)
 
@@ -128,18 +139,20 @@ def get_model_params(config: BaseConfig) -> dict[str, Any]:
             suffix = (
                 "iamondb" if config.gen_model_type == "Diffusion" else "iamdb"
             )
-            with open(
-                f"data/json_writer_ids/train_writer_ids_{suffix}.json", mode="r"
-            ) as fp:
+            json_path = Path(
+                f"data/json_writer_ids/train_writer_ids_{suffix}.json",
+            )
+            with json_path.open() as fp:
                 map_writer_id = json.load(fp)
-                num_class = len(map_writer_id)
+                num_classes = len(map_writer_id)
 
             return {
-                "num_class": num_class,
+                "num_classes": num_classes,
                 "gen_model_type": config.gen_model_type.lower(),
             }
         case _:
-            raise ValueError("Unsupported config type")
+            msg = "Unsupported config type"
+            raise ValueError(msg)
 
 
 def get_trainer_params(config: BaseConfig, args: Namespace) -> dict[str, Any]:
@@ -151,6 +164,7 @@ def get_trainer_params(config: BaseConfig, args: Namespace) -> dict[str, Any]:
 
     Returns:
         dict[str, Any]: A dictionary containing trainer parameters.
+
     """
     trainer_params = {
         "accelerator": utils.get_device() if args.gpu else "cpu",
@@ -176,7 +190,7 @@ def get_trainer_params(config: BaseConfig, args: Namespace) -> dict[str, Any]:
                     every_steps=10000,
                     dirpath=config.checkpoint_path,
                     filename="model-epoch{epoch:02d}-train_loss{train/loss:.2f}-val_loss{val/loss:.2f}",
-                )
+                ),
             )
             del trainer_params["max_epochs"]
         case ConfigLatentDiffusion():
@@ -185,7 +199,7 @@ def get_trainer_params(config: BaseConfig, args: Namespace) -> dict[str, Any]:
                     every_steps=1000,
                     dirpath=config.checkpoint_path,
                     filename="model-epoch{epoch:02d}-train_loss{train/loss:.2f}-val_loss{val/loss:.2f}",
-                )
+                ),
             )
         case ConfigConvNeXt() | ConfigInception():
             trainer_params["callbacks"].extend([
@@ -217,7 +231,7 @@ def setup_neptune_logger(
     args: Namespace,
     model_params: dict[str, Any],
     config_file: str,
-    model: Any,
+    model: object,
     neptune_token: str,
 ) -> tuple[NeptuneLogger, ModelVersion]:
     """Set up the Neptune logger for logging model training.
@@ -226,11 +240,13 @@ def setup_neptune_logger(
         args (Namespace): Parsed command-line arguments.
         model_params (dict[str, Any]): Model parameters.
         config_file (str): Path to the configuration file.
-        model (Any): The model to be logged.
+        model (object): The model to be logged.
         neptune_token (str): Neptune API token.
 
     Returns:
-        tuple[NeptuneLogger, ModelVersion]: The configured Neptune logger and model version.
+        tuple[NeptuneLogger, ModelVersion]: The configured Neptune logger
+                                            and model version.
+
     """
     neptune_logger = NeptuneLogger(
         project="codeplayer/handwriting-generation",
@@ -262,21 +278,23 @@ def train(
     config: BaseConfig,
     config_file: str,
     args: Namespace,
-    neptune_token: Optional[str] = None,
+    neptune_token: str | None = None,
 ) -> None:
-    """Configures and initiates the training process for the selected model.
+    """Configure and initiate the training process for the selected model.
 
-    This function handles the setup of the PyTorch Lightning Trainer, model initialization,
-    data module preparation, and optional logging with Neptune. It supports different
-    configurations for models like Diffusion, RNN, and LatentDiffusion.
+    This function handles the setup of the PyTorch Lightning Trainer,
+    model initialization, data module preparation, and optional logging
+    with Neptune. It supports different configurations for models like
+    Diffusion, and LatentDiffusion.
 
     Args:
         config (BaseConfig): The loaded configuration object.
         config_file (str): Path to the configuration file.
         args (Namespace): Parsed command-line arguments.
-        neptune_token (str): Neptune API token.
+        neptune_token (Optional[str]): Neptune API token. Defaults to None.
+
     """
-    L.seed_everything(seed=42)
+    lg.seed_everything(seed=42)
 
     model_version = None
     model_params = get_model_params(config)
@@ -293,20 +311,24 @@ def train(
     if (
         args.neptune
         and neptune_token
-        and isinstance(config, (ConfigDiffusion, ConfigLatentDiffusion))
+        and isinstance(config, ConfigDiffusion | ConfigLatentDiffusion)
     ):
         neptune_logger, model_version = setup_neptune_logger(
-            args, model_params, config_file, model, neptune_token
+            args,
+            model_params,
+            config_file,
+            model,
+            neptune_token,
         )
         trainer_params["logger"] = neptune_logger
 
-    trainer = L.Trainer(**trainer_params)
+    trainer = lg.Trainer(**trainer_params)
     trainer.fit(model=model, datamodule=data_module)
     trainer.save_checkpoint(filepath=f"{config.checkpoint_path}/model.ckpt")
 
     if model_version:
         model_version["model/binary"].upload(
-            f"{config.checkpoint_path}/model.ckpt"
+            f"{config.checkpoint_path}/model.ckpt",
         )
         model_version.stop()
 
