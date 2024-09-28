@@ -1,15 +1,17 @@
-import lightning as lg
+import lightning as lp
 import torch
 from einops import repeat
 from lightning.pytorch.utilities.types import OptimizerLRScheduler
 from torch import Tensor, nn
+from torch.optim.adamw import AdamW
+from torch.optim.lr_scheduler import StepLR
 from torchmetrics.classification import MulticlassAccuracy
 from torchvision import models
 from torchvision.models import ConvNeXt_Tiny_Weights
 from torchvision.transforms import v2
 
 
-class ConvNeXt(lg.LightningModule):
+class ConvNeXt(lp.LightningModule):
     """ConvNeXt model class for training and validation using PyTorch Lightning.
 
     Args:
@@ -182,12 +184,8 @@ class ConvNeXt(lg.LightningModule):
             learning rate scheduler.
 
         """
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr)
-        scheduler = torch.optim.lr_scheduler.StepLR(
-            optimizer,
-            step_size=15,
-            gamma=0.1,
-        )
+        optimizer = AdamW(self.parameters(), lr=self.lr)
+        scheduler = StepLR(optimizer, step_size=15, gamma=0.1)
 
         return {
             "optimizer": optimizer,
