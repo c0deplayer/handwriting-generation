@@ -9,6 +9,7 @@ def load_config(config_file: str, model: str) -> BaseConfig:
 
     Args:
         config_file (str): Path to the configuration file.
+        model (str): The model name to load the configuration for.
 
     Returns:
         BaseConfig: The loaded configuration object.
@@ -16,27 +17,33 @@ def load_config(config_file: str, model: str) -> BaseConfig:
     Raises:
         FileNotFoundError: If the configuration file does not exist.
         ValueError: If the configuration file is invalid.
+
     """
     try:
         config = CONFIGS[model].from_yaml_file(file=config_file)
         if isinstance(config, list):
             config = config[0]
-        return config
     except FileNotFoundError as e:
-        raise FileNotFoundError(f"Configuration file {config_file} not found.") from e
+        error_message = f"Configuration file {config_file} not found."
+        raise FileNotFoundError(error_message) from e
     except Exception as e:
-        raise ValueError(f"Error loading configuration file {config_file}.") from e
+        error_message = f"Error loading configuration file {config_file}."
+        raise ValueError(error_message) from e
+
+    return config
 
 
 def get_device(*, return_device: bool = False) -> str | torch.device:
-    """
-    Get the best available device (CUDA, MPS, or CPU).
+    """Get the best available device (CUDA, MPS, or CPU).
 
     Args:
-        return_device (bool): Whether to return a torch.device object. Defaults to False.
+        return_device (bool): Whether to return a torch.device object.
+                              Defaults to False.
 
     Returns:
-        str | torch.device: The best available device as a string or torch.device object.
+        str | torch.device: The best available device as a string or
+                            torch.device object.
+
     """
     device = (
         "cuda"
