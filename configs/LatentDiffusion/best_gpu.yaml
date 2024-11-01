@@ -1,0 +1,24 @@
+checkpoint_path: "./model_checkpoints/LatentDiffusion"
+data_path: "./raw_data/IAMDB"
+
+batch_size: 200
+img_height: 64
+img_width: 256
+max_text_len: 12
+max_files: 0
+vocab: ' _abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ,.''-":()!'
+train_size: 0.9
+
+autoencoder_path: "runwayml/stable-diffusion-v1-5"
+max_epochs: 1000
+channels: 4
+emb_dim: 320
+n_heads: 4
+res_layers: 1
+n_steps: 700
+d_cond: 320
+beta_start: 0.0001
+beta_end: 0.02
+attention_levels: [1, 1]
+channel_multipliers: [1, 1]
+drop_rate: 0.2

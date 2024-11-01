@@ -1,21 +1,15 @@
 blacklist: [z00-001, z01-000, z01-000z, 01-010a, z01-010, z01-010b, z01-010c]
-checkpoint_path: "./model_checkpoints/Diffusion"
+checkpoint_path: "./model_checkpoints/ConvNeXt"
 data_path: "./raw_data/IAMonDB"
-dataset_txt: "./raw_data/IAMonDB/dataset.txt"
 
+max_epochs: 50
 batch_size: 96
 img_height: 90
 img_width: 1400
 max_files: 0
 max_seq_len: 480
 max_text_len: 50
-train_size: 0.9
+train_size: 0.85
 vocab: ' _abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ,.''-":()!'
 
-use_ema: True
-max_epochs: 60000
-channels: 128
-drop_rate: 0.2
-num_layers: 2
-clip_grad: 100.0
-clip_algorithm: "norm"
+gen_model_type: "Diffusion"

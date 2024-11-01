@@ -1,31 +1,40 @@
 [project]
-name = ""
-version = ""
-description = ""
+name = "handwriting-generation"
+version = "0.1.0"
+description = "Default template for PDM package"
 authors = [
-    { name = "Jakub Kujawa", email = "ZK_Jakub@proton.me" },
+    {name = "Jakub Kujawa", email = "ZK_Jakub@proton.me"},
 ]
 dependencies = [
-    "gradio>=4.3.0",
-    "lightning[extra]>=2.1.1",
-    "torchmetrics>=1.2.0",
-    "einops>=0.7.0",
-    "neptune>=1.8.3",
-    "dataclass-wizard>=0.22.2",
-    "setuptools>=68.2.2",
-    "h5py>=3.10.0",
-    "diffusers[torch]>=0.23.0",
+    "torchmetrics>=1.4.2",
+    "torch>=2.4.1",
+    "torchvision>=0.19.1",
+    "torchaudio>=2.4.1",
+    "einops>=0.8.0",
+    "dataclass-wizard>=0.23.0",
+    "neptune>=1.11.1",
+    "h5py>=3.11.0",
+    "diffusers[torch]>=0.30.3",
     "potracer>=0.0.4",
     "clean-fid>=0.1.35",
-    "black>=23.11.0",
-    "scipy>=1.10.1",
-    "torch>=2.1.1",
-    "torchvision>=0.16.1",
-    "torchaudio>=2.1.1",
+    "scipy>=1.14.1",
+    "gradio>=4.44.0",
+    "lightning>=2.4.0",
+    "python-dotenv>=1.0.1",
 ]
-requires-python = ">=3.8,<=3.11"
+requires-python = ">=3.12,<3.13"
 readme = "README.md"
-license = { text = "MIT" }
+license = {text = "MIT"}
 
 [tool.pdm.scripts]
 post_init = { composite = ["pdm install"] }
+
+[tool.pdm]
+distribution = false
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+
+[tool.ruff]
+extend-include = ["*.ipynb"]
